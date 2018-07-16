@@ -1,8 +1,21 @@
 {
   "name": "serverless-simple-middleware",
+  "description": "Simple middleware to translate the interface of lambda's handler to request => response",
   "version": "0.0.1",
   "main": "src/index.js",
+  "author": "jaeyoung.choi",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/lacti/serverless-simple-middleware.git"
+  },
+  "keywords": [
+    "serverless"
+  ],
+  "bugs": {
+    "url": "https://github.com/lacti/serverless-simple-middleware/issues"
+  },
+  "homepage": "https://github.com/lacti/serverless-simple-middleware#readme",
   "optionalDependencies": {
     "aws-sdk": "^2.275.1"
   },
