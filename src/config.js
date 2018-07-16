@@ -1,3 +1,12 @@
+/**
+ * @typedef { {version: string, region: string, ...} } Config
+ * @typedef { {[service: string]: Config} } ServiceConfigs
+ * @typedef { (string) => Config } ConfigResolver
+ */
+
+/**
+ * @type {ServiceConfigs}
+ */
 const config = {
   s3: {
     version: '2006-03-01',
@@ -14,8 +23,9 @@ const config = {
 };
 
 /**
- * @typedef { {version: string, region: string, ...} } Config
- * @typedef { (string) => Config } ConfigResolver
+ * @type {ServiceConfigs}
+ */
+let overrideConfig = null;
 
 /**
  * @type {ConfigResolver}
@@ -30,17 +40,25 @@ const get = service => {
   if (overridedResolver) {
     return overridedResolver(service);
   }
-  return config[service];
+  return (overrideConfig || config)[service];
 };
 
 /**
- * @param {ConfigResolver} resolver
+ * @param {ConfigResolver} newResolver
  */
-const inject = resolver => {
-  overridedResolver = resolver;
+const resolver = newResolver => {
+  overridedResolver = newResolver;
+};
+
+/**
+ * @param {ServiceConfigs} newConfig
+ */
+const configure = newConfig => {
+  overrideConfig = newConfig;
 };
 
 module.exports = {
-  get: get,
-  inject: inject,
+  get,
+  resolver,
+  configure,
 };
