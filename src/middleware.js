@@ -86,18 +86,55 @@ class ProxyHandler {
   }
 }
 
-/**
- * @type {Promise.<any>}
- */
-let preparation = null;
+class PreparationHolder {
+  /**
+   * @param {Promise.<any>} promise
+   */
+  constructor(promise) {
+    this.promise = promise;
+    this.fire = false;
+  }
+
+  has() {
+    return this.promise != null;
+  }
+
+  isExecutable() {
+    return this.has() && !this.fire;
+  }
+
+  async execute() {
+    if (!this.isExecutable()) {
+      return;
+    }
+    await this.promise;
+    this.fire = true;
+  }
+}
+
+let preparation = new PreparationHolder(null);
 
 /**
  * @param {Promise.<any>} newPreparation
+ * @param {boolean} installIfEmpty
  */
-const setup = newPreparation => {
-  return (preparation = !preparation
-    ? preparation.then(newPreparation)
-    : newPreparation);
+const setup = (newPreparation, installIfEmpty = true) => {
+  if (installIfEmpty && preparation.has()) {
+    logger.debug('Preparation is already installed.');
+    return;
+  }
+  if (newPreparation instanceof Promise) {
+    preparation = new PreparationHolder(newPreparation);
+  } else if (newPreparation instanceof Function) {
+    const maybePromise = newPreparation();
+    const ensurePromise =
+      maybePromise instanceof Promise
+        ? maybePromise
+        : Promise.resolve(maybePromise);
+    preparation = new PreparationHolder(ensurePromise);
+  }
+  logger.debug('Preparation is set up completely.');
+  logger.debug(preparation);
 };
 
 /**
@@ -106,8 +143,10 @@ const setup = newPreparation => {
 const middleware = handler => {
   const proxy = new ProxyHandler(handler);
   return async (event, context, callback) => {
-    if (!preparation) {
-      await preparation;
+    logger.silly('Check preparation before run middleware');
+    logger.silly(preparation);
+    if (preparation.isExecutable()) {
+      await preparation.execute();
     }
     return proxy.delegate(event, context, callback);
   };
