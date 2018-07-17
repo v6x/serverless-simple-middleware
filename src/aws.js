@@ -1,4 +1,5 @@
 const AWS = require('aws-sdk');
+const fs = require('fs');
 const logger = require('./logger')(__filename);
 const config = require('./config');
 
@@ -155,6 +156,35 @@ class Aws {
       .promise();
     logger.stupid(`deleteResult`, deleteResult);
     return handle;
+  }
+
+  async download(bucketName, key, localPath) {
+    logger.debug(`Get a stream of item[${key}] from bucket[${bucketName}]`);
+    const stream = this.s3
+      .getObject({
+        Bucket: bucketName,
+        Key: key,
+      })
+      .createReadStream();
+    return new Promise((resolve, reject) =>
+      stream
+        .pipe(fs.createWriteStream(localPath))
+        .on('finish', () => resolve(localPath))
+        .on('error', error => reject(error)),
+    );
+  }
+
+  async upload(bucketName, localPath, key) {
+    logger.debug(`Upload item[${key}] into bucket[${bucketName}]`);
+    const putResult = await this.s3
+      .upload({
+        Bucket: bucketName,
+        Key: key,
+        Body: fs.createReadStream(localPath),
+      })
+      .promise();
+    logger.stupid(`putResult`, putResult);
+    return key;
   }
 
   /**
