@@ -1,3 +1,6 @@
+const fetch = require('cross-fetch');
+const fs = require('fs');
+
 /**
  * @typedef { {version: string, region: string, ...} } Config
  * @typedef { {[service: string]: Config} } ServiceConfigs
@@ -39,7 +42,17 @@ const get = service => {
  * @param {ServiceConfigs} newConfig
  */
 const load = newConfig => {
-  overrideConfig = newConfig;
+  if (typeof newConfig === 'string') {
+    if (/^http.*json$/.test(newConfig)) {
+      return fetch(newConfig)
+        .then(r => r.json())
+        .then(load);
+    } else if (/json$/.test(newConfig)) {
+      return load(JSON.parse(fs.readFileSync(newConfig)));
+    }
+    return load(JSON.parse(newConfig));
+  }
+  return (overrideConfig = newConfig);
 };
 
 module.exports = {
