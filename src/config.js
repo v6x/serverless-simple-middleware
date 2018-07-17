@@ -28,37 +28,21 @@ const config = {
 let overrideConfig = null;
 
 /**
- * @type {ConfigResolver}
- */
-let overridedResolver = null;
-
-/**
  * @param { 's3' | 'sqs' | 'dynamodb' } service
  * @returns { Config }
  */
 const get = service => {
-  if (overridedResolver) {
-    return overridedResolver(service);
-  }
   return (overrideConfig || config)[service];
-};
-
-/**
- * @param {ConfigResolver} newResolver
- */
-const resolver = newResolver => {
-  overridedResolver = newResolver;
 };
 
 /**
  * @param {ServiceConfigs} newConfig
  */
-const configure = newConfig => {
+const load = newConfig => {
   overrideConfig = newConfig;
 };
 
 module.exports = {
   get,
-  resolver,
-  configure,
+  load,
 };

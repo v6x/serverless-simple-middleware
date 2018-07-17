@@ -251,7 +251,8 @@ class Aws {
     return updateResult;
   }
 
-  // Initialize
+  // Setup
+
   /**
    * @param {string} queueName
    */

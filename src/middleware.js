@@ -87,35 +87,50 @@ class ProxyHandler {
 }
 
 /**
+ * @type {Promise.<any>}
+ */
+let preparation = null;
+
+/**
+ * @param {Promise.<any>} newPreparation
+ */
+const setup = newPreparation => {
+  return (preparation = !preparation
+    ? preparation.then(newPreparation)
+    : newPreparation);
+};
+
+/**
  * @param { (request: ProxyRequest, response: ProxyResponse ) => * } handler
  */
 const middleware = handler => {
   const proxy = new ProxyHandler(handler);
-  return (event, context, callback) => proxy.delegate(event, context, callback);
+  return async (event, context, callback) => {
+    if (!preparation) {
+      await preparation;
+    }
+    return proxy.delegate(event, context, callback);
+  };
 };
 
 /**
  * @param { ( env: {} ) => { [name: string]: () => Promise<boolean> } } mapper
  */
-const initialize = mapper =>
-  middleware(async request => {
-    // Do nothing on production stage.
-    if (process.env.STAGE === 'prod') {
-      return { ok: true };
-    }
-    const env = process.env;
-    const mapping = mapper(env);
-    const successes = await Promise.all(
-      Object.keys(mapping).map(name => mapping[name]()),
-    );
-    return Object.keys(mapping).reduce(
-      (result, name, index) =>
-        Object.assign(result, { [name]: successes[index] }),
-      {},
-    );
-  });
+const initialize = async mapper => {
+  const env = process.env;
+  const mapping = mapper(env);
+  const successes = await Promise.all(
+    Object.keys(mapping).map(name => mapping[name]()),
+  );
+  return Object.keys(mapping).reduce(
+    (result, name, index) =>
+      Object.assign(result, { [name]: successes[index] }),
+    {},
+  );
+};
 
 module.exports = {
+  setup,
   middleware,
   initialize,
 };
