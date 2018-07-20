@@ -219,7 +219,7 @@ class Aws {
    * @returns { { key: string, url: string } }
    */
   getAttachmentUrl(bucketName, key, fileName, params = {}) {
-    return this.getSignedUrl(bucketName, key, {
+    return this.getSignedUrl(bucketName, key, 'getObject', {
       ...params,
       ResponseContentDisposition: `attachment; filename="${fileName}"`,
     });
