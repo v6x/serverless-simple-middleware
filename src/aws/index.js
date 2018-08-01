@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
 const fs = require('fs');
-const logger = require('./logger')(__filename);
+const logger = require('../utils/logger')(__filename);
 const config = require('./config');
 
 class Aws {
@@ -386,4 +386,8 @@ class Aws {
   }
 }
 
-module.exports = new Aws();
+module.exports = {
+  aws: new Aws(),
+  config,
+  Aws,
+};

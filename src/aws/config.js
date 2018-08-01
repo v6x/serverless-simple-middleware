@@ -40,6 +40,7 @@ const get = service => {
 
 /**
  * @param {ServiceConfigs} newConfig
+ * @returns { Promise.<Config> }
  */
 const load = newConfig => {
   if (typeof newConfig === 'string') {

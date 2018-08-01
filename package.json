@@ -66,6 +66,7 @@
     "trailingComma": "all"
   },
   "dependencies": {
-    "cross-fetch": "^2.2.2"
+    "cross-fetch": "^2.2.2",
+    "p-limit": "^2.0.0"
   }
 }

@@ -28,6 +28,7 @@ class Logger {
    */
   constructor(name) {
     this.name = name;
+    this.log = this.log.bind(this);
     for (const level of [
       'error',
       'warn',
