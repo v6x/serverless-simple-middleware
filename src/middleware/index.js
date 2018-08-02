@@ -71,7 +71,5 @@ module.exports = {
   build,
   aws: require('./aws'),
   event: require('./event'),
-  setup: require('./setup'),
-  empty: () => new HandlerPluginBase(),
   HandlerPluginBase,
 };

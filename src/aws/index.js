@@ -293,10 +293,12 @@ class Aws {
           QueueNamePrefix: queueName,
         })
         .promise();
-      for (const queueUrl of listResult.QueueUrls) {
-        if (queueUrl.endsWith(queueName)) {
-          logger.debug(`Queue[${queueName} => ${queueUrl}] already exists.`);
-          return true;
+      if (listResult.QueueUrls) {
+        for (const queueUrl of listResult.QueueUrls) {
+          if (queueUrl.endsWith(queueName)) {
+            logger.debug(`Queue[${queueName} => ${queueUrl}] already exists.`);
+            return true;
+          }
         }
       }
     } catch (error) {
@@ -387,7 +389,6 @@ class Aws {
 }
 
 module.exports = {
-  aws: new Aws(),
   config,
   Aws,
 };

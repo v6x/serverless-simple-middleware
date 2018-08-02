@@ -1,5 +1,5 @@
 const { HandlerPluginBase } = require('./base');
-const { aws } = require('../aws');
+const { Aws } = require('../aws');
 const logger = require('../utils/logger')(__filename);
 
 class Event {
@@ -31,6 +31,7 @@ class EventStream {
    */
   constructor(queueName) {
     this.queueName = queueName;
+    this.aws = new Aws();
 
     /** @type {Array.<Event>} */
     this.buffer = [];
@@ -48,12 +49,12 @@ class EventStream {
       return;
     }
     try {
-      const eventQueueUrl = await aws.getQueueUrl(this.queueName);
+      const eventQueueUrl = await this.aws.getQueueUrl(this.queueName);
       const chunkSize = 10;
       for (let begin = 0; begin < this.buffer.length; begin += chunkSize) {
         const end = Math.min(this.buffer.length, begin + chunkSize);
         const subset = this.buffer.slice(begin, end);
-        const sendBatchResult = await aws.sqs
+        const sendBatchResult = await this.aws.sqs
           .sendMessageBatch({
             QueueUrl: eventQueueUrl,
             Entries: subset.map(each => ({

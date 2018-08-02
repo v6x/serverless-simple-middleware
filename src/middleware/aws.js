@@ -1,4 +1,4 @@
-const { aws, config: awsConfig } = require('../aws');
+const { Aws, config: awsConfig } = require('../aws');
 const { HandlerPluginBase } = require('./base');
 
 const logger = require('../utils/logger')(__filename);
@@ -6,7 +6,7 @@ const logger = require('../utils/logger')(__filename);
 /**
  * @param { ( env: {} ) => { [name: string]: () => Promise<boolean> } } mapper
  */
-const initialize = async mapper => {
+const initialize = async (aws, mapper) => {
   const env = process.env;
   const mapping = mapper(aws, env);
   const successes = await Promise.all(
@@ -19,7 +19,7 @@ const initialize = async mapper => {
   );
 };
 
-let setupOnce = false;
+let defaultAws = null;
 
 class AwsHandlerPlugin extends HandlerPluginBase {
   constructor(options) {
@@ -29,7 +29,7 @@ class AwsHandlerPlugin extends HandlerPluginBase {
 
   async begin(request) {
     // Setup only once.
-    if (!setupOnce) {
+    if (!defaultAws) {
       const { config, mapper } = this.options;
 
       if (config) {
@@ -37,14 +37,15 @@ class AwsHandlerPlugin extends HandlerPluginBase {
         await awsConfig.load(config);
       }
 
+      defaultAws = new Aws();
+
       if (mapper) {
         logger.debug(`Initialize aws components with mapper.`);
-        await initialize(mapper);
+        await initialize(defaultAws, mapper);
       }
-      setupOnce = true;
     }
 
-    request.aux.aws = aws;
+    request.aux.aws = defaultAws;
     request.aux.awsConfig = awsConfig;
   }
 }
