@@ -67,6 +67,8 @@
   },
   "dependencies": {
     "cross-fetch": "^2.2.2",
+    "directory-tree": "^2.1.0",
+    "diskusage": "^0.2.4",
     "p-limit": "^2.0.0"
   }
 }
