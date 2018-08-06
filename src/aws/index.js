@@ -158,6 +158,35 @@ class Aws {
     return handle;
   }
 
+  /**
+   * @param {string} queueName
+   * @param {Array.<string>} handles
+   */
+  async completeMessages(queueName, handles) {
+    logger.debug(`Complete a message with handle[${handles}]`);
+    if (!handles) {
+      return handles;
+    }
+
+    const chunkSize = 10;
+    for (let start = 0; start < handles.length; start += chunkSize) {
+      const end = Math.min(start + chunkSize, handles.length);
+      const sublist = handles.slice(start, end);
+      const queueUrl = await this.getQueueUrl(queueName);
+      const deletesResult = await this.sqs
+        .deleteMessageBatch({
+          QueueUrl: queueUrl,
+          Entries: sublist.map(handle => ({
+            Id: handle,
+            ReceiptHandle: handle,
+          })),
+        })
+        .promise();
+      logger.stupid(`deleteResult`, deletesResult);
+    }
+    return handles;
+  }
+
   async download(bucketName, key, localPath) {
     logger.debug(`Get a stream of item[${key}] from bucket[${bucketName}]`);
     const stream = this.s3
