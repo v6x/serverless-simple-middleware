@@ -70,6 +70,6 @@ const build = plugins => {
 module.exports = {
   build,
   aws: require('./aws'),
-  event: require('./event'),
+  trace: require('./trace'),
   HandlerPluginBase,
 };

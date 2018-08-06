@@ -2,7 +2,7 @@ const { HandlerPluginBase } = require('./base');
 const { Aws } = require('../aws');
 const logger = require('../utils/logger')(__filename);
 
-class Event {
+class TracerLog {
   /**
    * @param {string} key
    * @param {string} system
@@ -22,7 +22,7 @@ class Event {
   }
 }
 
-class EventStream {
+class Tracer {
   /**
    * @param {string} queueName
    * @param {string} key
@@ -33,15 +33,15 @@ class EventStream {
     this.queueName = queueName;
     this.aws = new Aws();
 
-    /** @type {Array.<Event>} */
+    /** @type {Array.<TracerLog>} */
     this.buffer = [];
   }
 
   /**
-   * @param {Event} event
+   * @param {TracerLog} log
    */
-  push(event) {
-    this.buffer.push(event);
+  push(log) {
+    this.buffer.push(log);
   }
 
   async flush() {
@@ -71,9 +71,9 @@ class EventStream {
   }
 }
 
-class EventBuilder {
+class TracerWrapper {
   /**
-   * @param {EventStream} stream
+   * @param {Tracer} stream
    * @param {string} system
    * @param {string} key
    * @param {string} action
@@ -92,15 +92,15 @@ class EventBuilder {
    */
   push(attribute, body, error = false) {
     this.stream.push(
-      new Event(this.key, this.system, this.action, attribute, body, error),
+      new TracerLog(this.key, this.system, this.action, attribute, body, error),
     );
   }
 }
 
-class EventHandlerPlugin extends HandlerPluginBase {
+class TracerHandlerPlugin extends HandlerPluginBase {
   constructor({ queueName, system }) {
     super();
-    this.stream = new EventStream(queueName);
+    this.stream = new Tracer(queueName);
     this.system = system;
     this.last = {
       key: 'nothing',
@@ -110,9 +110,9 @@ class EventHandlerPlugin extends HandlerPluginBase {
 
   begin(request) {
     request.aux.eventStream = this.stream;
-    request.aux.newEventStream = (key, action) => {
+    request.aux.tracer = (key, action) => {
       this.last = { key, action };
-      return new EventBuilder(this.stream, this.system, key, action);
+      return new TracerWrapper(this.stream, this.system, key, action);
     };
   }
 
@@ -124,7 +124,14 @@ class EventHandlerPlugin extends HandlerPluginBase {
     if (request.lastError) {
       const { key, action } = this.last;
       this.stream.push(
-        new Event(key, this.system, action, 'error', request.lastError, true),
+        new TracerLog(
+          key,
+          this.system,
+          action,
+          'error',
+          request.lastError,
+          true,
+        ),
       );
     }
   }
@@ -133,4 +140,4 @@ class EventHandlerPlugin extends HandlerPluginBase {
 /**
  * @param { {queueName: string, system?: string} } options
  */
-module.exports = options => new EventHandlerPlugin(options);
+module.exports = options => new TracerHandlerPlugin(options);
