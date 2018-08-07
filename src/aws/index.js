@@ -118,7 +118,7 @@ class Aws {
         body: JSON.parse(each.Body),
       });
     }
-    logger.debug(`Receive a job[${JSON.stringify(data)}] from queue`);
+    logger.verbose(`Receive a message[${JSON.stringify(data)}] from queue`);
     return data;
   }
 
@@ -169,6 +169,7 @@ class Aws {
     }
 
     const chunkSize = 10;
+    let index = 0;
     for (let start = 0; start < handles.length; start += chunkSize) {
       const end = Math.min(start + chunkSize, handles.length);
       const sublist = handles.slice(start, end);
@@ -177,7 +178,7 @@ class Aws {
         .deleteMessageBatch({
           QueueUrl: queueUrl,
           Entries: sublist.map(handle => ({
-            Id: handle,
+            Id: (++index).toString(),
             ReceiptHandle: handle,
           })),
         })
