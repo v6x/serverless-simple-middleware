@@ -1,50 +1,66 @@
-const AWS = require('aws-sdk');
-const fs = require('fs');
-const logger = require('../utils/logger')(__filename);
-const config = require('./config');
+import * as AWS from 'aws-sdk'; // tslint:disable-line
+import * as fs from 'fs';
 
-class Aws {
+import { getLogger } from '../utils';
+import { awsConfig } from './config';
+
+import {
+  AWSComponent,
+  S3SignedUrlParams,
+  S3SignedUrlResult,
+  SQSMessageBody,
+} from './define';
+
+const logger = getLogger(__filename);
+
+export class SimpleAWS {
+  private queueUrls: { [queueName: string]: string };
+  private lazyS3: AWS.S3 | undefined;
+  private lazySqs: AWS.SQS | undefined;
+  private lazyDynamodb: AWS.DynamoDB.DocumentClient | undefined;
+  private lazyDynamodbAdmin: AWS.DynamoDB | undefined;
+
   constructor() {
     /**
      * The simple cache for { queueName: queueUrl }.
      * It can help in the only case of launching this project as offline.
      * @type { { [queueName: string]: string } }
      */
-    this._queueUrls = {};
+    this.queueUrls = {};
   }
 
   get s3() {
-    if (this._s3 === undefined) {
-      this._s3 = new AWS.S3(config.get('s3'));
+    if (this.lazyS3 === undefined) {
+      this.lazyS3 = new AWS.S3(awsConfig.get(AWSComponent.s3));
     }
-    return this._s3;
+    return this.lazyS3;
   }
   get sqs() {
-    if (this._sqs === undefined) {
-      this._sqs = new AWS.SQS(config.get('sqs'));
+    if (this.lazySqs === undefined) {
+      this.lazySqs = new AWS.SQS(awsConfig.get(AWSComponent.sqs));
     }
-    return this._sqs;
+    return this.lazySqs;
   }
   get dynamodb() {
-    if (this._dynamodb === undefined) {
-      this._dynamodb = new AWS.DynamoDB.DocumentClient(config.get('dynamodb'));
+    if (this.lazyDynamodb === undefined) {
+      this.lazyDynamodb = new AWS.DynamoDB.DocumentClient(
+        awsConfig.get(AWSComponent.dynamodb),
+      );
     }
-    return this._dynamodb;
+    return this.lazyDynamodb;
   }
   get dynamodbAdmin() {
-    if (this._dynamodbAdmin === undefined) {
-      this._dynamodbAdmin = new AWS.DynamoDB(config.get('dynamodb'));
+    if (this.lazyDynamodbAdmin === undefined) {
+      this.lazyDynamodbAdmin = new AWS.DynamoDB(
+        awsConfig.get(AWSComponent.dynamodb),
+      );
     }
-    return this._dynamodbAdmin;
+    return this.lazyDynamodbAdmin;
   }
 
-  /**
-   * @param {string} queueName
-   * @returns {Promise<string>} A promise of queueUrl
-   */
-  async getQueueUrl(queueName) {
-    if (this._queueUrls[queueName] !== undefined) {
-      return this._queueUrls[queueName];
+  public getQueueUrl = async (queueName: string): Promise<string> => {
+    if (this.queueUrls[queueName] !== undefined) {
+      return this.queueUrls[queueName];
     }
     const urlResult = await this.sqs
       .getQueueUrl({
@@ -52,14 +68,13 @@ class Aws {
       })
       .promise();
     logger.stupid(`urlResult`, urlResult);
-    return (this._queueUrls[queueName] = urlResult.QueueUrl);
-  }
+    if (!urlResult.QueueUrl) {
+      throw new Error(`No queue url with name[${queueName}]`);
+    }
+    return (this.queueUrls[queueName] = urlResult.QueueUrl);
+  };
 
-  /**
-   * @param {string} queueName
-   * @param {*} data
-   */
-  async enqueue(queueName, data) {
+  public enqueue = async (queueName: string, data: any): Promise<number> => {
     logger.debug(`Send message[${data.key}] to queue.`);
     logger.stupid(`data`, data);
     const queueUrl = await this.getQueueUrl(queueName);
@@ -79,21 +94,18 @@ class Aws {
       })
       .promise();
     logger.stupid(`attrResult`, attrResult);
-    return +attrResult.Attributes['ApproximateNumberOfMessages'];
-  }
+    if (!attrResult.Attributes) {
+      return 0;
+    }
+    return +attrResult.Attributes.ApproximateNumberOfMessages;
+  };
 
-  /**
-   * @param {string} queueName
-   * @param {number} fetchSize
-   * @param {number} waitSeconds
-   * @param {number} visibilityTimeout
-   */
-  async dequeue(
-    queueName,
-    fetchSize = 1,
-    waitSeconds = 1,
-    visibilityTimeout = 15,
-  ) {
+  public dequeue = async <T>(
+    queueName: string,
+    fetchSize: number = 1,
+    waitSeconds: number = 1,
+    visibilityTimeout: number = 15,
+  ): Promise<Array<SQSMessageBody<T>>> => {
     logger.debug(`Receive message from queue[${queueName}].`);
     const queueUrl = await this.getQueueUrl(queueName);
     const receiveResult = await this.sqs
@@ -113,39 +125,52 @@ class Aws {
     }
     const data = [];
     for (const each of receiveResult.Messages) {
-      data.push({
+      if (!each.ReceiptHandle) {
+        logger.warn(`No receipt handler: ${JSON.stringify(each)}`);
+        continue;
+      }
+      const message: SQSMessageBody<T> = {
         handle: each.ReceiptHandle,
-        body: JSON.parse(each.Body),
-      });
+        body: each.Body ? (JSON.parse(each.Body) as T) : undefined,
+      };
+      data.push(message);
     }
     logger.verbose(`Receive a message[${JSON.stringify(data)}] from queue`);
     return data;
-  }
+  };
 
-  /**
-   * @param {string} queueName
-   * @param {string} handle
-   * @param {number} seconds
-   */
-  async retainMessage(queueName, handle, seconds) {
-    logger.debug(`Change visibilityTimeout of ${handle} to ${seconds}secs.`);
-    const queueUrl = await this.getQueueUrl(queueName);
-    const changeResult = await this.sqs
-      .changeMessageVisibility({
-        QueueUrl: queueUrl,
-        ReceiptHandle: handle,
-        VisibilityTimeout: seconds.toString(),
-      })
-      .promise();
-    logger.stupid(`changeResult`, changeResult);
-    return handle;
-  }
+  public retainMessage = async (
+    queueName: string,
+    handle: string,
+    seconds: number,
+  ): Promise<string> =>
+    new Promise<string>(async (resolve, reject) => {
+      logger.debug(`Change visibilityTimeout of ${handle} to ${seconds}secs.`);
+      this.getQueueUrl(queueName)
+        .then(queueUrl => {
+          this.sqs.changeMessageVisibility(
+            {
+              QueueUrl: queueUrl,
+              ReceiptHandle: handle,
+              VisibilityTimeout: seconds,
+            },
+            (err, changeResult) => {
+              if (err) {
+                reject(err);
+              } else {
+                logger.stupid(`changeResult`, changeResult);
+                resolve(handle);
+              }
+            },
+          );
+        })
+        .catch(reject);
+    });
 
-  /**
-   * @param {string} queueName
-   * @param {string} handle
-   */
-  async completeMessage(queueName, handle) {
+  public completeMessage = async (
+    queueName: string,
+    handle: string,
+  ): Promise<string> => {
     logger.debug(`Complete a message with handle[${handle}]`);
     const queueUrl = await this.getQueueUrl(queueName);
     const deleteResult = await this.sqs
@@ -156,13 +181,9 @@ class Aws {
       .promise();
     logger.stupid(`deleteResult`, deleteResult);
     return handle;
-  }
+  };
 
-  /**
-   * @param {string} queueName
-   * @param {Array.<string>} handles
-   */
-  async completeMessages(queueName, handles) {
+  public completeMessages = async (queueName: string, handles: string[]) => {
     logger.debug(`Complete a message with handle[${handles}]`);
     if (!handles) {
       return handles;
@@ -186,9 +207,13 @@ class Aws {
       logger.stupid(`deleteResult`, deletesResult);
     }
     return handles;
-  }
+  };
 
-  async download(bucketName, key, localPath) {
+  public download = async (
+    bucketName: string,
+    key: string,
+    localPath: string,
+  ): Promise<string> => {
     logger.debug(`Get a stream of item[${key}] from bucket[${bucketName}]`);
     const stream = this.s3
       .getObject({
@@ -196,15 +221,19 @@ class Aws {
         Key: key,
       })
       .createReadStream();
-    return new Promise((resolve, reject) =>
+    return new Promise<string>((resolve, reject) =>
       stream
         .pipe(fs.createWriteStream(localPath))
         .on('finish', () => resolve(localPath))
         .on('error', error => reject(error)),
     );
-  }
+  };
 
-  async upload(bucketName, localPath, key) {
+  public upload = async (
+    bucketName: string,
+    localPath: string,
+    key: string,
+  ): Promise<string> => {
     logger.debug(`Upload item[${key}] into bucket[${bucketName}]`);
     const putResult = await this.s3
       .upload({
@@ -215,54 +244,42 @@ class Aws {
       .promise();
     logger.stupid(`putResult`, putResult);
     return key;
-  }
+  };
 
-  /**
-   * @param {string} bucketName
-   * @param {string} key
-   * @param { "getObject" | "putObject" } operation
-   * @param { { Key: string, Expires: number, ContentType: string, ACL: "public-read" } } params
-   * @returns { { key: string, url: string } }
-   */
-  getSignedUrl(bucketName, key, operation = 'getObject', params = {}) {
+  public getSignedUrl = (
+    bucketName: string,
+    key: string,
+    operation: 'getObject' | 'putObject' = 'getObject',
+    params?: S3SignedUrlParams,
+  ): S3SignedUrlResult => {
     return {
       key,
-      url: this.s3.getSignedUrl(
-        operation,
-        Object.assign(
-          {
-            Bucket: bucketName,
-            Key: key,
-            Expires: 60 * 10,
-          },
-          params,
-        ),
-      ),
+      url: this.s3.getSignedUrl(operation, {
+        Bucket: bucketName,
+        Key: key,
+        Expires: 60 * 10,
+        ...(params || {}),
+      }),
     };
-  }
+  };
 
-  /**
-   * @param {string} bucketName
-   * @param {string} key
-   * @param {string} fileName
-   * @param { { Expires: number, ContentType: string, ACL: "public-read" } } params
-   * @returns { { key: string, url: string } }
-   */
-  getAttachmentUrl(bucketName, key, fileName, params = {}) {
+  public getAttachmentUrl = (
+    bucketName: string,
+    key: string,
+    fileName: string,
+    params?: S3SignedUrlParams,
+  ): S3SignedUrlResult => {
     return this.getSignedUrl(bucketName, key, 'getObject', {
       ...params,
       ResponseContentDisposition: `attachment; filename="${fileName}"`,
     });
-  }
+  };
 
-  /**
-   * @template T
-   * @param {string} tableName
-   * @param { { [keyColumn: string]: string } } key
-   * @param {T} defaultValue
-   * @returns {Promise<T>} A promise of a retrieved item
-   */
-  async getDynamoDbItem(tableName, key, defaultValue = {}) {
+  public getDynamoDbItem = async <T>(
+    tableName: string,
+    key: { [keyColumn: string]: string },
+    defaultValue?: T,
+  ): Promise<T> => {
     logger.debug(
       `Read an item with key[${JSON.stringify(key)}] from ${tableName}.`,
     );
@@ -273,29 +290,28 @@ class Aws {
       })
       .promise();
     logger.stupid(`getResult`, getResult);
-    const item =
+    const item: T =
       getResult !== undefined && getResult.Item !== undefined
-        ? getResult.Item
+        ? ((getResult.Item as any) as T) // Casts forcefully.
         : defaultValue;
     logger.stupid(`item`, item);
     return item;
-  }
+  };
 
-  /**
-   * @param {string} tableName
-   * @param { { [keyColumn: string]: string } } key
-   * @param { [ { [column: string]: any } ] } keyValues
-   */
-  async updateDynamoDbItem(tableName, key, keyValues) {
+  public updateDynamoDbItem = async (
+    tableName: string,
+    key: { [keyColumn: string]: string },
+    columnValues: { [column: string]: any },
+  ) => {
     logger.debug(
       `Update an item with key[${JSON.stringify(key)}] to ${tableName}`,
     );
-    logger.stupid(`keyValues`, keyValues);
-    const expressions = Object.keys(keyValues)
-      .map(key => `${key} = :${key}`)
+    logger.stupid(`keyValues`, columnValues);
+    const expressions = Object.keys(columnValues)
+      .map(column => `${column} = :${column}`)
       .join(', ');
-    const attributeValues = Object.keys(keyValues)
-      .map(key => [`:${key}`, keyValues[key]])
+    const attributeValues = Object.keys(columnValues)
+      .map(column => [`:${column}`, columnValues[column]])
       .reduce((obj, pair) => ({ ...obj, [pair[0]]: pair[1] }), {});
     logger.stupid(`expressions`, expressions);
     logger.stupid(`attributeValues`, attributeValues);
@@ -309,14 +325,11 @@ class Aws {
       .promise();
     logger.stupid(`updateResult`, updateResult);
     return updateResult;
-  }
+  };
 
   // Setup
 
-  /**
-   * @param {string} queueName
-   */
-  async setupQueue(queueName) {
+  public setupQueue = async (queueName: string) => {
     try {
       const listResult = await this.sqs
         .listQueues({
@@ -342,16 +355,21 @@ class Aws {
       .promise();
     logger.stupid(`createResult`, createResult);
     return true;
-  }
+  };
 
-  /**
-   * @param {string} bucketName
-   * @param { { methods: ["GET" | "POST" | "PUT" | "DELETE" | "HEAD" ], origins: [ string ] } } cors
-   */
-  async setupStorage(bucketName, cors) {
+  public setupStorage = async (
+    bucketName: string,
+    cors: {
+      methods: ['GET' | 'POST' | 'PUT' | 'DELETE' | 'HEAD'];
+      origins: [string];
+    },
+  ) => {
     try {
       const listResult = await this.s3.listBuckets().promise();
-      if (listResult.Buckets.map(each => each.Name).includes(bucketName)) {
+      if (
+        listResult.Buckets &&
+        listResult.Buckets.map(each => each.Name).includes(bucketName)
+      ) {
         logger.debug(`Bucket[${bucketName}] already exists.`);
         return true;
       }
@@ -383,16 +401,12 @@ class Aws {
       logger.stupid(`corsResult`, corsResult);
     }
     return true;
-  }
+  };
 
-  /**
-   * @param {string} tableName
-   * @param {string} keyColumn
-   */
-  async setupDynamoDb(tableName, keyColumn) {
+  public setupDynamoDb = async (tableName: string, keyColumn: string) => {
     try {
       const listResult = await this.dynamodbAdmin.listTables().promise();
-      if (listResult.TableNames.includes(tableName)) {
+      if (listResult.TableNames && listResult.TableNames.includes(tableName)) {
         logger.debug(`Table[${tableName}] already exists.`);
         return true;
       }
@@ -415,10 +429,5 @@ class Aws {
       .promise();
     logger.stupid(`createResult`, createResult);
     return true;
-  }
+  };
 }
-
-module.exports = {
-  config,
-  Aws,
-};
