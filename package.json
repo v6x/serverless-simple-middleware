@@ -22,7 +22,8 @@
     "build": "tsc --project tsconfig.json",
     "build:watch": "tsc --project tsconfig.json --watch",
     "test": "jest --config jest.config.js",
-    "test:watch": "jest --config jest.config.js --watch"
+    "test:watch": "jest --config jest.config.js --watch",
+    "deploy": "yarn build && yarn publish"
   },
   "dependencies": {
     "cross-fetch": "^2.2.2",
