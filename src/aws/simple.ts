@@ -139,6 +139,30 @@ export class SimpleAWS {
     return data;
   };
 
+  public dequeueAll = async <T>(
+    queueName: string,
+    visibilityTimeout: number = 15,
+  ): Promise<Array<SQSMessageBody<T>>> => {
+    const messages = [];
+    const fetchSize = 10; // This is max-value for fetching in each time.
+    while (true) {
+      const eachOfMessages = await this.dequeue<T>(
+        queueName,
+        fetchSize,
+        0,
+        visibilityTimeout,
+      );
+      if (!eachOfMessages || eachOfMessages.length === 0) {
+        break;
+      }
+      for (const each of eachOfMessages) {
+        messages.push(each);
+      }
+    }
+    logger.stupid(`messages`, messages);
+    return messages;
+  };
+
   public retainMessage = async (
     queueName: string,
     handle: string,
