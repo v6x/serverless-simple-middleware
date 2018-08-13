@@ -1,12 +1,7 @@
 import { SimpleAWS } from '../aws';
 import { getLogger, stringifyError } from '../utils';
 
-import {
-  HandlerAuxBase,
-  HandlerPluginBase,
-  HandlerRequest,
-  HandlerResponse,
-} from './base';
+import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
 
 const logger = getLogger(__filename);
 
@@ -159,11 +154,10 @@ export class TracerHandlerPlugin extends HandlerPluginBase<
 
   public end = () => this.tracer.flush();
 
-  public error = (
-    request: HandlerRequest,
-    response: HandlerResponse,
-    aux?: TracerHandlerRequestAux,
-  ) => {
+  public error = ({
+    request,
+    aux,
+  }: HandlerContext<TracerHandlerRequestAux>) => {
     if (!aux) {
       console.warn('Aux is not initialized');
       return;

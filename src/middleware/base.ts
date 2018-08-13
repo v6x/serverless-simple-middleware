@@ -86,10 +86,14 @@ export interface HandlerAuxBase {
   [key: string]: any;
 }
 
+export interface HandlerContext<A extends HandlerAuxBase> {
+  request: HandlerRequest;
+  response: HandlerResponse;
+  aux: A;
+}
+
 export type Handler<A extends HandlerAuxBase> = (
-  request: HandlerRequest,
-  response: HandlerResponse,
-  aux: A,
+  context: HandlerContext<A>,
 ) => any | Promise<any> | undefined;
 
 export interface HandlerPlugin<A extends HandlerAuxBase> {
@@ -104,21 +108,13 @@ export class HandlerPluginBase<A extends HandlerAuxBase>
   public create = (): Promise<A> | A => {
     throw new Error('Not yet implemented');
   };
-  public begin = (
-    request: HandlerRequest,
-    response: HandlerResponse,
-    aux: A,
-  ) => {
+  public begin = (_: HandlerContext<A>) => {
     // do nothing
   };
-  public end = (request: HandlerRequest, response: HandlerResponse, aux: A) => {
+  public end = (_: HandlerContext<A>) => {
     // do nothing
   };
-  public error = (
-    request: HandlerRequest,
-    response: HandlerResponse,
-    aux: A,
-  ) => {
+  public error = (_: HandlerContext<A>) => {
     // do nothing
   };
 }

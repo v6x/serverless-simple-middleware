@@ -89,7 +89,11 @@ class HandlerProxy<A extends HandlerAuxBase> {
   private generateDelegator = (source: Handler<A>): Delegator => async (
     okResponsible: boolean,
   ) => {
-    const maybePromise = source(this.request, this.response, this.aux);
+    const maybePromise = source({
+      request: this.request,
+      response: this.response,
+      aux: this.aux,
+    });
     const result =
       maybePromise instanceof Promise ? await maybePromise : maybePromise;
     logger.stupid(`result`, result);

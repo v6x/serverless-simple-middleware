@@ -17,11 +17,11 @@ test('basic', () => {
     }),
   ]);
 
-  handler(
-    async (request: HandlerRequest, response: HandlerResponse, aux: Aux) => {
-      const { aws, tracer } = aux;
-      expect(aws).toBeDefined();
-      expect(tracer).toBeDefined();
-    },
-  )({}, {}, () => 0);
+  handler(async ({ request, response, aux }) => {
+    const { aws, tracer } = aux;
+    expect(request).toBeDefined();
+    expect(response).toBeDefined();
+    expect(aws).toBeDefined();
+    expect(tracer).toBeDefined();
+  })({}, {}, () => 0);
 });
