@@ -2,7 +2,7 @@ import * as AWS from 'aws-sdk'; // tslint:disable-line
 import * as fs from 'fs';
 
 import { getLogger } from '../utils';
-import { awsConfig } from './config';
+import { awsConfig as defaultConfig, SimpleAWSConfig } from './config';
 
 import {
   AWSComponent,
@@ -15,12 +15,14 @@ const logger = getLogger(__filename);
 
 export class SimpleAWS {
   private queueUrls: { [queueName: string]: string };
+  private config: SimpleAWSConfig;
   private lazyS3: AWS.S3 | undefined;
   private lazySqs: AWS.SQS | undefined;
   private lazyDynamodb: AWS.DynamoDB.DocumentClient | undefined;
   private lazyDynamodbAdmin: AWS.DynamoDB | undefined;
 
-  constructor() {
+  constructor(config: SimpleAWSConfig = defaultConfig) {
+    this.config = config;
     /**
      * The simple cache for { queueName: queueUrl }.
      * It can help in the only case of launching this project as offline.
@@ -31,20 +33,20 @@ export class SimpleAWS {
 
   get s3() {
     if (this.lazyS3 === undefined) {
-      this.lazyS3 = new AWS.S3(awsConfig.get(AWSComponent.s3));
+      this.lazyS3 = new AWS.S3(this.config.get(AWSComponent.s3));
     }
     return this.lazyS3;
   }
   get sqs() {
     if (this.lazySqs === undefined) {
-      this.lazySqs = new AWS.SQS(awsConfig.get(AWSComponent.sqs));
+      this.lazySqs = new AWS.SQS(this.config.get(AWSComponent.sqs));
     }
     return this.lazySqs;
   }
   get dynamodb() {
     if (this.lazyDynamodb === undefined) {
       this.lazyDynamodb = new AWS.DynamoDB.DocumentClient(
-        awsConfig.get(AWSComponent.dynamodb),
+        this.config.get(AWSComponent.dynamodb),
       );
     }
     return this.lazyDynamodb;
@@ -52,7 +54,7 @@ export class SimpleAWS {
   get dynamodbAdmin() {
     if (this.lazyDynamodbAdmin === undefined) {
       this.lazyDynamodbAdmin = new AWS.DynamoDB(
-        awsConfig.get(AWSComponent.dynamodb),
+        this.config.get(AWSComponent.dynamodb),
       );
     }
     return this.lazyDynamodbAdmin;
@@ -141,14 +143,15 @@ export class SimpleAWS {
 
   public dequeueAll = async <T>(
     queueName: string,
+    limitSize: number = Number.MAX_VALUE,
     visibilityTimeout: number = 15,
   ): Promise<Array<SQSMessageBody<T>>> => {
     const messages = [];
-    const fetchSize = 10; // This is max-value for fetching in each time.
-    while (true) {
-      const eachOfMessages = await this.dequeue<T>(
+    const maxFetchSize = 10; // This is max-value for fetching in each time.
+    while (messages.length < limitSize) {
+      const eachOfMessages: Array<SQSMessageBody<T>> = await this.dequeue<T>(
         queueName,
-        fetchSize,
+        Math.min(limitSize - messages.length, maxFetchSize),
         0,
         visibilityTimeout,
       );
@@ -303,7 +306,7 @@ export class SimpleAWS {
     tableName: string,
     key: { [keyColumn: string]: string },
     defaultValue?: T,
-  ): Promise<T> => {
+  ): Promise<T | undefined> => {
     logger.debug(
       `Read an item with key[${JSON.stringify(key)}] from ${tableName}.`,
     );
@@ -314,7 +317,7 @@ export class SimpleAWS {
       })
       .promise();
     logger.stupid(`getResult`, getResult);
-    const item: T =
+    const item: T | undefined =
       getResult !== undefined && getResult.Item !== undefined
         ? ((getResult.Item as any) as T) // Casts forcefully.
         : defaultValue;

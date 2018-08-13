@@ -1,11 +1,12 @@
 import {
   awsConfig,
+  loadAWSConfig,
   SimpleAWS,
   SimpleAWSConfig,
   SimpleAWSConfigLoadParam,
 } from '../aws';
 import { getLogger } from '../utils';
-import { HandlerAuxBase, HandlerPluginBase, HandlerRequest } from './base';
+import { HandlerAuxBase, HandlerPluginBase } from './base';
 
 const logger = getLogger(__filename);
 
@@ -58,7 +59,7 @@ export class AWSHandlerPlugin extends HandlerPluginBase<
 
       if (config) {
         logger.debug(`Load aws config from ${config}`);
-        await awsConfig.load(config);
+        await loadAWSConfig(config, awsConfig);
       }
 
       defaultAws = new SimpleAWS();

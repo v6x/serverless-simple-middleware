@@ -15,7 +15,7 @@ export interface AWSConfigs {
 
 export type AWSConfigResolver = (service: string) => AWSConfig;
 
-const config: AWSConfigs = {
+const defaultConfigs: AWSConfigs = {
   s3: {
     version: '2006-03-01',
     region: 'ap-northeast-2',
@@ -33,28 +33,42 @@ const config: AWSConfigs = {
 export type SimpleAWSConfigLoadParam = AWSConfigs | string;
 
 export class SimpleAWSConfig {
-  private overrideConfigs: AWSConfigs | undefined;
+  private configs: AWSConfigs;
+
+  public constructor(configs: AWSConfigs = defaultConfigs) {
+    this.configs = configs;
+  }
 
   public get = (service: AWSComponent): AWSConfig => {
-    return (this.overrideConfigs || config)[service];
+    return this.configs[service];
   };
 
-  public load = (
-    newConfigsOrUrl: SimpleAWSConfigLoadParam,
-  ): Promise<AWSConfigs> => {
-    if (typeof newConfigsOrUrl === 'string') {
-      if (/^http.*json$/.test(newConfigsOrUrl)) {
-        return fetch(newConfigsOrUrl)
-          .then((r: any) => r.json())
-          .then(this.load);
-      } else if (/json$/.test(newConfigsOrUrl)) {
-        return this.load(JSON.parse(fs.readFileSync(newConfigsOrUrl, 'utf-8')));
-      }
-      return this.load(JSON.parse(newConfigsOrUrl));
-    }
-    this.overrideConfigs = newConfigsOrUrl;
-    return Promise.resolve(newConfigsOrUrl);
+  public update = (configs: AWSConfigs) => {
+    this.configs = configs;
   };
 }
 
 export const awsConfig = new SimpleAWSConfig();
+
+export const loadAWSConfig = (
+  newConfigsOrUrl: SimpleAWSConfigLoadParam,
+  target?: SimpleAWSConfig,
+): Promise<SimpleAWSConfig> => {
+  if (typeof newConfigsOrUrl === 'string') {
+    if (/^http.*json$/.test(newConfigsOrUrl)) {
+      return fetch(newConfigsOrUrl)
+        .then(r => r.json())
+        .then(loadAWSConfig);
+    } else if (/json$/.test(newConfigsOrUrl)) {
+      return loadAWSConfig(
+        JSON.parse(fs.readFileSync(newConfigsOrUrl, 'utf-8')),
+      );
+    }
+    return loadAWSConfig(JSON.parse(newConfigsOrUrl));
+  }
+  if (!target) {
+    return Promise.resolve(new SimpleAWSConfig(newConfigsOrUrl));
+  }
+  target.update(newConfigsOrUrl);
+  return Promise.resolve(target);
+};
