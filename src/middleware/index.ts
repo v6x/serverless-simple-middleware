@@ -1,14 +1,23 @@
 import build from './build';
 
 import aws from './aws';
+import logger from './logger';
+import mysql from './mysql';
+import stat from './stat';
 import trace from './trace';
 
 export const middleware = {
   build,
   aws,
   trace,
+  logger,
+  stat,
+  mysql,
 };
 
 export * from './base';
 export * from './aws';
 export * from './trace';
+export * from './logger';
+export * from './stat';
+export * from './mysql';

@@ -48,13 +48,15 @@ type LogMessage = string | Error;
 
 export class Logger {
   private name: string;
+  private severity: number;
 
-  constructor(name: string) {
+  constructor(name: string, level: LogLevel = currentLevel()) {
     this.name = name;
+    this.severity = severity(level);
   }
 
   public log = (level: LogLevel, message: LogMessage) => {
-    if (severity(currentLevel()) >= severity(level)) {
+    if (this.severity >= severity(level)) {
       console.log(
         `[${new Date().toISOString()}][${level.toUpperCase()}][${this.name}] ${
           message instanceof Error ? stringifyError(message) : message
@@ -86,10 +88,10 @@ export class Logger {
 
 const loggers: { [name: string]: Logger } = {};
 
-export const getLogger = (fileName: string): Logger => {
+export const getLogger = (fileName: string, level?: LogLevel): Logger => {
   const name = basename(fileName);
   if (loggers[name] === undefined) {
-    loggers[name] = new Logger(name);
+    loggers[name] = new Logger(name, level);
   }
   return loggers[name];
 };

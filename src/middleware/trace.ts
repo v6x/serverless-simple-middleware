@@ -1,4 +1,4 @@
-import { SimpleAWS } from '../aws';
+import { loadAWSConfig, SimpleAWS, SimpleAWSConfigLoadParam } from '../aws';
 import { getLogger, stringifyError } from '../utils';
 
 import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
@@ -40,9 +40,9 @@ export class Tracer {
   private aws: SimpleAWS;
   private buffer: TracerLog[];
 
-  constructor(queueName: string) {
+  constructor(queueName: string, aws: SimpleAWS) {
     this.queueName = queueName;
-    this.aws = new SimpleAWS();
+    this.aws = aws;
     this.buffer = [];
   }
 
@@ -75,7 +75,7 @@ export class Tracer {
   };
 }
 
-export class TracerWrapper {
+class TracerWrapper {
   private tracer: Tracer;
   private route: string;
   private system: string;
@@ -111,26 +111,24 @@ export class TracerWrapper {
   };
 }
 
-export interface TracerHandlerPluginOptions {
+export interface TracerPluginOptions {
   route: string;
   queueName: string;
   system: string;
+  awsConfig?: SimpleAWSConfigLoadParam;
 }
 
-export interface TracerHandlerRequestAux extends HandlerAuxBase {
+export interface TracerPluginAux extends HandlerAuxBase {
   tracer: (key: string, action: string) => TracerWrapper;
 }
 
-export class TracerHandlerPlugin extends HandlerPluginBase<
-  TracerHandlerRequestAux
-> {
+export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
   private tracer: Tracer;
-  private options: TracerHandlerPluginOptions;
+  private options: TracerPluginOptions;
   private last: { key: string; action: string };
 
-  constructor(options: TracerHandlerPluginOptions) {
+  constructor(options: TracerPluginOptions) {
     super();
-    this.tracer = new Tracer(options.queueName);
     this.options = options;
     this.last = {
       key: 'nothing',
@@ -139,6 +137,12 @@ export class TracerHandlerPlugin extends HandlerPluginBase<
   }
 
   public create = async () => {
+    const awsConfig = this.options.awsConfig
+      ? await loadAWSConfig(this.options.awsConfig)
+      : undefined;
+    const aws = new SimpleAWS(awsConfig);
+
+    this.tracer = new Tracer(this.options.queueName, aws);
     const tracer = (key: string, action: string) => {
       this.last = { key, action };
       return new TracerWrapper(
@@ -154,10 +158,7 @@ export class TracerHandlerPlugin extends HandlerPluginBase<
 
   public end = () => this.tracer.flush();
 
-  public error = ({
-    request,
-    aux,
-  }: HandlerContext<TracerHandlerRequestAux>) => {
+  public error = ({ request, aux }: HandlerContext<TracerPluginAux>) => {
     if (!aux) {
       console.warn('Aux is not initialized');
       return;
@@ -179,6 +180,5 @@ export class TracerHandlerPlugin extends HandlerPluginBase<
   };
 }
 
-const build = (options: TracerHandlerPluginOptions) =>
-  new TracerHandlerPlugin(options);
+const build = (options: TracerPluginOptions) => new TracerPlugin(options);
 export default build;

@@ -1,22 +1,24 @@
 import * as dirTree from 'directory-tree';
 import * as disk from 'diskusage';
-import { getLogger } from './logger';
+
+import { getLogger } from '../utils';
+import { HandlerAuxBase, HandlerPluginBase } from './base';
 
 const logger = getLogger(__filename);
 
-export type IDiskInfoError = Error | string;
+type IDiskInfoError = Error | string;
 
-export interface IDiskInfo {
+interface IDiskInfo {
   total: number;
   available: number;
   free: number;
 }
 
-export interface IDirTreeItem {
+interface IDirTreeItem {
   path: string;
 }
 
-export const printDirectoryStat = async (directory: string) =>
+const printDirectoryStat = async (directory: string) =>
   new Promise(resolve => {
     disk.check(directory, (err: IDiskInfoError, info: IDiskInfo) => {
       if (err) {
@@ -35,3 +37,16 @@ export const printDirectoryStat = async (directory: string) =>
       }
     });
   });
+
+export interface StatPluginAux extends HandlerAuxBase {
+  printDirectoryStat: typeof printDirectoryStat;
+}
+
+export class StatPlugin extends HandlerPluginBase<StatPluginAux> {
+  public create = async () => {
+    return { printDirectoryStat };
+  };
+}
+
+const build = () => new StatPlugin();
+export default build;

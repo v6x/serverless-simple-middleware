@@ -2,7 +2,7 @@ import * as AWS from 'aws-sdk'; // tslint:disable-line
 import * as fs from 'fs';
 
 import { getLogger } from '../utils';
-import { awsConfig as defaultConfig, SimpleAWSConfig } from './config';
+import { SimpleAWSConfig } from './config';
 
 import {
   AWSComponent,
@@ -21,8 +21,8 @@ export class SimpleAWS {
   private lazyDynamodb: AWS.DynamoDB.DocumentClient | undefined;
   private lazyDynamodbAdmin: AWS.DynamoDB | undefined;
 
-  constructor(config: SimpleAWSConfig = defaultConfig) {
-    this.config = config;
+  constructor(config?: SimpleAWSConfig) {
+    this.config = config || new SimpleAWSConfig();
     /**
      * The simple cache for { queueName: queueUrl }.
      * It can help in the only case of launching this project as offline.
@@ -387,8 +387,8 @@ export class SimpleAWS {
   public setupStorage = async (
     bucketName: string,
     cors: {
-      methods: ['GET' | 'POST' | 'PUT' | 'DELETE' | 'HEAD'];
-      origins: [string];
+      methods: Array<'GET' | 'POST' | 'PUT' | 'DELETE' | 'HEAD'>;
+      origins: string[];
     },
   ) => {
     try {

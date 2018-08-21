@@ -1,13 +1,7 @@
-import {
-  AWSHandlerPluginRequestAux,
-  HandlerRequest,
-  HandlerResponse,
-  middleware,
-  TracerHandlerRequestAux,
-} from '../src';
+import { AWSPluginAux, middleware, TracerPluginAux } from '../src';
 
-test('basic', () => {
-  type Aux = AWSHandlerPluginRequestAux & TracerHandlerRequestAux;
+test('basic', async () => {
+  type Aux = AWSPluginAux & TracerPluginAux;
   const handler = middleware.build<Aux>([
     middleware.aws(),
     middleware.trace({
@@ -17,7 +11,7 @@ test('basic', () => {
     }),
   ]);
 
-  handler(async ({ request, response, aux }) => {
+  await handler(async ({ request, response, aux }) => {
     const { aws, tracer } = aux;
     expect(request).toBeDefined();
     expect(response).toBeDefined();

@@ -6,7 +6,7 @@ import { AWSComponent } from './define';
 export interface AWSConfig {
   version: string;
   region: string;
-  [key: string]: string;
+  [key: string]: string | boolean | number;
 }
 
 export interface AWSConfigs {
@@ -42,17 +42,10 @@ export class SimpleAWSConfig {
   public get = (service: AWSComponent): AWSConfig => {
     return this.configs[service];
   };
-
-  public update = (configs: AWSConfigs) => {
-    this.configs = configs;
-  };
 }
-
-export const awsConfig = new SimpleAWSConfig();
 
 export const loadAWSConfig = (
   newConfigsOrUrl: SimpleAWSConfigLoadParam,
-  target?: SimpleAWSConfig,
 ): Promise<SimpleAWSConfig> => {
   if (typeof newConfigsOrUrl === 'string') {
     if (/^http.*json$/.test(newConfigsOrUrl)) {
@@ -66,9 +59,5 @@ export const loadAWSConfig = (
     }
     return loadAWSConfig(JSON.parse(newConfigsOrUrl));
   }
-  if (!target) {
-    return Promise.resolve(new SimpleAWSConfig(newConfigsOrUrl));
-  }
-  target.update(newConfigsOrUrl);
-  return Promise.resolve(target);
+  return Promise.resolve(new SimpleAWSConfig(newConfigsOrUrl));
 };

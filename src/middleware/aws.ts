@@ -1,5 +1,4 @@
 import {
-  awsConfig,
   loadAWSConfig,
   SimpleAWS,
   SimpleAWSConfig,
@@ -10,7 +9,7 @@ import { HandlerAuxBase, HandlerPluginBase } from './base';
 
 const logger = getLogger(__filename);
 
-export type InitializerMapper = (
+type InitializerMapper = (
   aws: SimpleAWS,
   env: {},
 ) => { [name: string]: () => Promise<boolean> };
@@ -27,31 +26,30 @@ const initialize = async (aws: SimpleAWS, mapper: InitializerMapper) => {
   );
 };
 
-let defaultAws: SimpleAWS | undefined;
-
-export interface AWSHandlerPluginOptions {
+export interface AWSPluginOptions {
   config?: SimpleAWSConfigLoadParam;
   mapper?: InitializerMapper;
 }
 
-export interface AWSHandlerPluginRequestAux extends HandlerAuxBase {
+export interface AWSPluginAux extends HandlerAuxBase {
   aws: SimpleAWS;
   awsConfig: SimpleAWSConfig;
 }
 
-export class AWSHandlerPlugin extends HandlerPluginBase<
-  AWSHandlerPluginRequestAux
-> {
-  private options?: AWSHandlerPluginOptions;
+export class AWSPlugin extends HandlerPluginBase<AWSPluginAux> {
+  private options?: AWSPluginOptions;
+  private aws?: SimpleAWS;
+  private config: SimpleAWSConfig;
 
-  constructor(options?: AWSHandlerPluginOptions) {
+  constructor(options?: AWSPluginOptions) {
     super();
     this.options = options;
+    this.config = new SimpleAWSConfig();
   }
 
   public create = async () => {
     // Setup only once.
-    if (!defaultAws) {
+    if (!this.aws) {
       const { config, mapper } = this.options || {
         config: undefined,
         mapper: undefined,
@@ -59,23 +57,22 @@ export class AWSHandlerPlugin extends HandlerPluginBase<
 
       if (config) {
         logger.debug(`Load aws config from ${config}`);
-        await loadAWSConfig(config, awsConfig);
+        this.config = await loadAWSConfig(config);
       }
 
-      defaultAws = new SimpleAWS();
+      this.aws = new SimpleAWS(this.config);
 
       if (mapper) {
         logger.debug(`Initialize aws components with mapper.`);
-        await initialize(defaultAws, mapper);
+        await initialize(this.aws, mapper);
       }
     }
     return {
-      aws: defaultAws,
-      awsConfig,
+      aws: this.aws,
+      awsConfig: this.config,
     };
   };
 }
 
-const build = (options?: AWSHandlerPluginOptions) =>
-  new AWSHandlerPlugin(options);
+const build = (options?: AWSPluginOptions) => new AWSPlugin(options);
 export default build;

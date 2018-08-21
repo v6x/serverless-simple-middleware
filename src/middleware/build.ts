@@ -1,5 +1,6 @@
 import { getLogger } from '../utils/logger';
 
+import { stringifyError } from '../utils';
 import {
   Handler,
   HandlerAuxBase,
@@ -52,9 +53,20 @@ class HandlerProxy<A extends HandlerAuxBase> {
   public call = async (
     middleware: HandlerMiddleware<A>,
     handler: Handler<A>,
-  ) => {
-    this.aux = await middleware.auxPromise;
+  ): Promise<any[]> => {
+    try {
+      this.aux = await middleware.auxPromise;
+    } catch (error) {
+      logger.error(
+        `Error while initializing plugins' aux: ${stringifyError(error)}`,
+      );
+      this.response.fail(
+        error instanceof Error ? { error: error.message } : error,
+      );
+      return [error];
+    }
 
+    const actualHandler = [this.generateDelegator(handler)];
     const beginHandlers = middleware.plugins.map(plugin =>
       this.generateDelegator(plugin.begin),
     );
@@ -65,13 +77,28 @@ class HandlerProxy<A extends HandlerAuxBase> {
       this.generateDelegator(plugin.error),
     );
 
-    for (const beginHandler of beginHandlers) {
-      await this.safeCall(beginHandler, false, errorHandlers);
+    const iterate = async (
+      handlers: Delegator[],
+      okResponsible: boolean = false,
+    ) =>
+      Promise.all(
+        handlers.map(each => this.safeCall(each, okResponsible, errorHandlers)),
+      );
+
+    const result = [
+      ...(await iterate(beginHandlers)),
+      ...(await iterate(actualHandler, true)),
+      ...(await iterate(endHandlers)),
+    ];
+    // In test phase, throws any exception if there was.
+    if (process.env.NODE_ENV === 'test') {
+      for (const each of result) {
+        if (each instanceof Error) {
+          throw each;
+        }
+      }
     }
-    await this.safeCall(this.generateDelegator(handler), true, errorHandlers);
-    for (const endHandler of endHandlers) {
-      await this.safeCall(endHandler, false, errorHandlers);
-    }
+    return result;
   };
 
   private safeCall = async (
@@ -80,16 +107,18 @@ class HandlerProxy<A extends HandlerAuxBase> {
     errorHandlers: Delegator[],
   ) => {
     try {
-      return await delegator(okResponsible);
-    } catch (err) {
-      return this.handleError(err, errorHandlers);
+      const result = await delegator(okResponsible);
+      return result;
+    } catch (error) {
+      const handled = await this.handleError(error, errorHandlers);
+      return handled;
     }
   };
 
-  private generateDelegator = (source: Handler<A>): Delegator => async (
+  private generateDelegator = (handler: Handler<A>): Delegator => async (
     okResponsible: boolean,
   ) => {
-    const maybePromise = source({
+    const maybePromise = handler({
       request: this.request,
       response: this.response,
       aux: this.aux,
@@ -97,12 +126,10 @@ class HandlerProxy<A extends HandlerAuxBase> {
     const result =
       maybePromise instanceof Promise ? await maybePromise : maybePromise;
     logger.stupid(`result`, result);
-    if (this.response.completed) {
-      return result;
+    if (!this.response.completed && okResponsible) {
+      this.response.ok(result);
     }
-    if (okResponsible) {
-      return this.response.ok(result);
-    }
+    return result;
   };
 
   private handleError = async (error: Error, errorHandlers?: Delegator[]) => {
@@ -119,7 +146,7 @@ class HandlerProxy<A extends HandlerAuxBase> {
       }
     }
     if (!this.response.completed) {
-      return this.response.fail(
+      this.response.fail(
         error instanceof Error ? { error: error.message } : error,
       );
     }
