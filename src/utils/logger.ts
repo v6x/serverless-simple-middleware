@@ -1,48 +1,43 @@
 import { basename } from 'path';
+import { $enum } from 'ts-enum-util';
 import { stringifyError } from './misc';
+import { currentStage, StagingLevel } from './staging';
 
 export enum LogLevel {
-  error = 'error',
-  warn = 'warn',
-  info = 'info',
-  debug = 'debug',
-  verbose = 'verbose',
-  silly = 'silly',
-  stupid = 'stupid',
+  Error = 'error',
+  Warn = 'warn',
+  Info = 'info',
+  Debug = 'debug',
+  Verbose = 'verbose',
+  Silly = 'silly',
+  Stupid = 'stupid',
 }
 
 const severity = (level: LogLevel) => {
   switch (level) {
-    case LogLevel.error:
+    case LogLevel.Error:
       return 100;
-    case LogLevel.warn:
+    case LogLevel.Warn:
       return 200;
-    case LogLevel.info:
+    case LogLevel.Info:
       return 300;
-    case LogLevel.debug:
+    case LogLevel.Debug:
       return 400;
-    case LogLevel.verbose:
+    case LogLevel.Verbose:
       return 500;
-    case LogLevel.silly:
+    case LogLevel.Silly:
       return 600;
-    case LogLevel.stupid:
+    case LogLevel.Stupid:
       return 700;
     default:
       return 1000;
   }
 };
 
-const currentLevel = (): LogLevel => {
-  if (!process.env.LOG_LEVEL) {
-    return process.env.STAGE === 'prod' ? LogLevel.debug : LogLevel.verbose;
-  }
-  for (const [key, value] of Object.entries(LogLevel)) {
-    if (key === process.env.LOG_LEVEL) {
-      return value;
-    }
-  }
-  return LogLevel.info;
-};
+export const currentLogLevel = $enum(LogLevel).asValueOrDefault(
+  process.env.LOG_LEVEL,
+  currentStage !== StagingLevel.Release ? LogLevel.Verbose : LogLevel.Debug,
+);
 
 type LogMessage = string | Error;
 
@@ -50,7 +45,7 @@ export class Logger {
   private name: string;
   private severity: number;
 
-  constructor(name: string, level: LogLevel = currentLevel()) {
+  constructor(name: string, level: LogLevel = currentLogLevel) {
     this.name = name;
     this.severity = severity(level);
   }
@@ -66,12 +61,12 @@ export class Logger {
     return message;
   };
 
-  public error = (message: LogMessage) => this.log(LogLevel.error, message);
-  public warn = (message: LogMessage) => this.log(LogLevel.warn, message);
-  public info = (message: LogMessage) => this.log(LogLevel.info, message);
-  public debug = (message: LogMessage) => this.log(LogLevel.debug, message);
-  public verbose = (message: LogMessage) => this.log(LogLevel.verbose, message);
-  public silly = (message: LogMessage) => this.log(LogLevel.silly, message);
+  public error = (message: LogMessage) => this.log(LogLevel.Error, message);
+  public warn = (message: LogMessage) => this.log(LogLevel.Warn, message);
+  public info = (message: LogMessage) => this.log(LogLevel.Info, message);
+  public debug = (message: LogMessage) => this.log(LogLevel.Debug, message);
+  public verbose = (message: LogMessage) => this.log(LogLevel.Verbose, message);
+  public silly = (message: LogMessage) => this.log(LogLevel.Silly, message);
 
   public stupid = <T>(
     message: string,
@@ -79,7 +74,7 @@ export class Logger {
     replacer?: (key: string, value: T) => T,
   ) => {
     this.log(
-      LogLevel.stupid,
+      LogLevel.Stupid,
       `${message}: ${JSON.stringify(object, replacer)}`,
     );
     return object;
