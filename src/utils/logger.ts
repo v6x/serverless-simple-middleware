@@ -1,7 +1,7 @@
 import { basename } from 'path';
+import { envDefault as currentStage, StagingLevel } from 'simple-staging';
 import { $enum } from 'ts-enum-util';
 import { stringifyError } from './misc';
-import { currentStage, StagingLevel } from './staging';
 
 export enum LogLevel {
   Error = 'error',
@@ -36,7 +36,9 @@ const severity = (level: LogLevel) => {
 
 export const currentLogLevel = $enum(LogLevel).asValueOrDefault(
   process.env.LOG_LEVEL,
-  currentStage !== StagingLevel.Release ? LogLevel.Verbose : LogLevel.Debug,
+  currentStage.level !== StagingLevel.Release
+    ? LogLevel.Verbose
+    : LogLevel.Debug,
 );
 
 type LogMessage = string | Error;
