@@ -1,4 +1,5 @@
 import { middleware, MySQLPluginAux } from '../src';
+import { getLogger } from '../src/utils';
 
 test('basic', async () => {
   type Aux = MySQLPluginAux;
@@ -8,7 +9,14 @@ test('basic', async () => {
         host: 'localhost',
         user: 'test',
         password: 'test***',
-        database: 'test',
+        database: 'test123',
+      },
+      schema: {
+        database: `CREATE DATABASE IF NOT EXISTS test123`,
+        eager: true,
+        tables: {
+          simple: `CREATE TABLE IF NOT EXISTS simple (id INT PRIMARY KEY);`,
+        },
       },
     }),
   ]);

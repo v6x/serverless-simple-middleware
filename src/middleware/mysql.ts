@@ -10,6 +10,7 @@ export interface MySQLPluginOptions {
   schema?: {
     eager?: boolean;
     ignoreError?: boolean;
+    database?: string;
     tables?: {
       [tableName: string]: string;
     };
@@ -21,16 +22,19 @@ export class ConnectionProxy {
   private connection?: mysql.Connection;
 
   private initialized: boolean;
+  private dbName?: string;
 
   public constructor(config: MySQLPluginOptions) {
     this.pluginConfig = config;
+    if (config.schema && config.schema.database) {
+      this.dbName = config.config.database;
+      config.config.database = undefined;
+    }
   }
 
   public query = <T>(sql: string, params?: any[]) =>
     new Promise<T | undefined>(async (resolve, reject) => {
-      const connection = this.connection
-        ? this.connection
-        : (this.connection = this.createConnection());
+      const connection = this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
       if (process.env.NODE_ENV !== 'test') {
@@ -65,18 +69,38 @@ export class ConnectionProxy {
     if (this.connection) {
       this.connection.end();
       this.connection = undefined;
+      logger.verbose('Connection is end');
     }
   };
 
   public onPluginCreated = async () => this.tryToInitializeSchema(true);
 
-  private createConnection = () => {
-    const connection = mysql.createConnection(this.pluginConfig.config);
-    connection.connect();
-    return connection;
+  private prepareConnection = () => {
+    if (this.connection) {
+      return this.connection;
+    }
+    this.connection = mysql.createConnection(this.pluginConfig.config);
+    this.connection.connect();
+    return this.connection;
   };
 
+  private changeDatabase = (dbName: string) =>
+    new Promise((resolve, reject) =>
+      this.prepareConnection().changeUser(
+        {
+          database: dbName,
+        },
+        err => (err ? reject(err) : resolve()),
+      ),
+    );
+
   private tryToInitializeSchema = async (initial: boolean) => {
+    const { eager = false, ignoreError = false, database = '', tables = {} } =
+      this.pluginConfig.schema || {};
+    if (initial && !eager) {
+      return;
+    }
+
     // This method can be called twice when eager option is on,
     // so this flag should be set and checked at first.
     if (this.initialized) {
@@ -84,13 +108,20 @@ export class ConnectionProxy {
     }
     this.initialized = true;
 
-    const { eager = false, ignoreError = false, tables = {} } =
-      this.pluginConfig.schema || {};
-    if (initial && !eager) {
-      return;
-    }
-
     try {
+      if (database) {
+        logger.debug(`Prepare a database[${this.dbName}]`);
+        logger.stupid(this.dbName!, database);
+        const result = await this.query(database);
+        logger.debug(
+          `Database[${this.dbName}] is initialized: ${JSON.stringify(result)}`,
+        );
+      }
+      if (this.dbName) {
+        await this.changeDatabase(this.dbName);
+        logger.verbose(`Database[${this.dbName}] is connected.`);
+      }
+
       for (const [name, query] of Object.entries(tables)) {
         logger.debug(`Prepare a table[${name}]`);
         logger.stupid(name, query);
@@ -99,7 +130,7 @@ export class ConnectionProxy {
           `Table[${name}] is initialized: ${JSON.stringify(result)}`,
         );
       }
-      logger.debug(`Database schema is initialized.`);
+      logger.verbose(`Database schema is initialized.`);
     } catch (error) {
       logger.warn(error);
       if (!ignoreError) {
