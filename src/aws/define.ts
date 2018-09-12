@@ -20,6 +20,7 @@ export interface S3SignedUrlParams {
     | 'authenticated-read'
     | string;
   ResponseContentDisposition?: string;
+  ResponseContentType?: string;
 }
 
 export interface S3SignedUrlResult {
