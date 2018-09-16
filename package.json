@@ -28,8 +28,6 @@
   "dependencies": {
     "@types/mysql": "^2.15.5",
     "cross-fetch": "^2.2.2",
-    "directory-tree": "^2.1.0",
-    "diskusage": "^0.2.4",
     "mysql": "^2.16.0",
     "p-limit": "^2.0.0",
     "simple-staging": "^0.0.6",
