@@ -55,6 +55,7 @@ export class Tracer {
     try {
       const eventQueueUrl = await this.aws.getQueueUrl(this.queueName);
       const chunkSize = 10;
+      let messageSerial = 0;
       for (let begin = 0; begin < this.buffer.length; begin += chunkSize) {
         const end = Math.min(this.buffer.length, begin + chunkSize);
         const subset = this.buffer.slice(begin, end);
@@ -62,7 +63,7 @@ export class Tracer {
           .sendMessageBatch({
             QueueUrl: eventQueueUrl,
             Entries: subset.map(each => ({
-              Id: `${each.key}_${each.timestamp}`,
+              Id: `${each.key}_${each.timestamp}_${++messageSerial}`,
               MessageBody: JSON.stringify(each),
             })),
           })
