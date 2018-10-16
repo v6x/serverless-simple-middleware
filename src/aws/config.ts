@@ -4,8 +4,6 @@ import * as fs from 'fs';
 import { AWSComponent } from './define';
 
 export interface AWSConfig {
-  version: string;
-  region: string;
   [key: string]: string | boolean | number;
 }
 
@@ -15,32 +13,17 @@ export interface AWSConfigs {
 
 export type AWSConfigResolver = (service: string) => AWSConfig;
 
-const defaultConfigs: AWSConfigs = {
-  s3: {
-    version: '2006-03-01',
-    region: 'ap-northeast-2',
-  },
-  sqs: {
-    version: '2012-11-05',
-    region: 'ap-northeast-2',
-  },
-  dynamodb: {
-    version: '2012-11-05',
-    region: 'ap-northeast-2',
-  },
-};
-
 export type SimpleAWSConfigLoadParam = AWSConfigs | string;
 
 export class SimpleAWSConfig {
-  private configs: AWSConfigs;
+  private configs: AWSConfigs | undefined;
 
-  public constructor(configs: AWSConfigs = defaultConfigs) {
+  public constructor(configs?: AWSConfigs) {
     this.configs = configs;
   }
 
-  public get = (service: AWSComponent): AWSConfig => {
-    return this.configs[service];
+  public get = (service: AWSComponent): AWSConfig | undefined => {
+    return this.configs ? this.configs[service] : undefined;
   };
 }
 
