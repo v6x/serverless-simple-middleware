@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { AWSComponent } from './define';
 
 export interface AWSConfig {
-  [key: string]: string | boolean | number;
+  [key: string]: string | boolean | number | undefined;
 }
 
 export interface AWSConfigs {

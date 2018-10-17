@@ -1,6 +1,13 @@
-import { loadAWSConfig, SimpleAWS, SimpleAWSConfigLoadParam } from '../aws';
+import * as AWS from 'aws-sdk';
+import {
+  AWSComponent,
+  loadAWSConfig,
+  SimpleAWS,
+  SimpleAWSConfigLoadParam,
+} from '../aws';
 import { getLogger, stringifyError } from '../utils';
 
+import { $enum } from 'ts-enum-util';
 import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
 
 const logger = getLogger(__filename);
@@ -37,12 +44,12 @@ export class TracerLog {
 
 export class Tracer {
   private queueName: string;
-  private aws: SimpleAWS;
+  private sqs: AWS.SQS;
   private buffer: TracerLog[];
 
-  constructor(queueName: string, aws: SimpleAWS) {
+  constructor(queueName: string, sqs: AWS.SQS) {
     this.queueName = queueName;
-    this.aws = aws;
+    this.sqs = sqs;
     this.buffer = [];
   }
 
@@ -53,13 +60,23 @@ export class Tracer {
       return;
     }
     try {
-      const eventQueueUrl = await this.aws.getQueueUrl(this.queueName);
+      const urlResult = await this.sqs
+        .getQueueUrl({
+          QueueName: this.queueName,
+        })
+        .promise();
+      logger.stupid(`urlResult`, urlResult);
+      if (!urlResult.QueueUrl) {
+        throw new Error(`No queue url with name[${this.queueName}]`);
+      }
+      const eventQueueUrl = urlResult.QueueUrl;
+
       const chunkSize = 10;
       let messageSerial = 0;
       for (let begin = 0; begin < this.buffer.length; begin += chunkSize) {
         const end = Math.min(this.buffer.length, begin + chunkSize);
         const subset = this.buffer.slice(begin, end);
-        const sendBatchResult = await this.aws.sqs
+        const sendBatchResult = await this.sqs
           .sendMessageBatch({
             QueueUrl: eventQueueUrl,
             Entries: subset.map(each => ({
@@ -116,7 +133,9 @@ export interface TracerPluginOptions {
   route: string;
   queueName: string;
   system: string;
+
   awsConfig?: SimpleAWSConfigLoadParam;
+  region?: string;
 }
 
 export interface TracerPluginAux extends HandlerAuxBase {
@@ -141,9 +160,23 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
     const awsConfig = this.options.awsConfig
       ? await loadAWSConfig(this.options.awsConfig)
       : undefined;
-    const aws = new SimpleAWS(awsConfig);
 
-    this.tracer = new Tracer(this.options.queueName, aws);
+    const sqs = (() => {
+      if (!awsConfig) {
+        return new AWS.SQS({
+          region: this.options.region,
+        });
+      }
+      $enum(AWSComponent).forEach(eachComponent => {
+        const config = awsConfig.get(eachComponent);
+        if (config) {
+          config.region = this.options.region;
+        }
+      });
+      return new SimpleAWS(awsConfig).sqs;
+    })();
+
+    this.tracer = new Tracer(this.options.queueName, sqs);
     const tracer = (key: string, action: string) => {
       this.last = { key, action };
       return new TracerWrapper(
