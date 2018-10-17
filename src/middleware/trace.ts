@@ -1,4 +1,4 @@
-import * as AWS from 'aws-sdk';
+import * as AWS from 'aws-sdk'; // tslint:disable-line
 import {
   AWSComponent,
   loadAWSConfig,
@@ -93,7 +93,7 @@ export class Tracer {
   };
 }
 
-class TracerWrapper {
+export class TracerWrapper {
   private tracer: Tracer;
   private route: string;
   private system: string;
