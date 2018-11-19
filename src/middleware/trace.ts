@@ -12,7 +12,32 @@ import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
 
 const logger = getLogger(__filename);
 
-export class TracerLog {
+export interface ITracerLog {
+  timestamp: number;
+  route: string;
+  key: string;
+  system: string;
+  action: string;
+  attribute: string;
+  body: string;
+  error: boolean;
+  client: string;
+  version: string;
+}
+
+export interface ITracerLogInput {
+  route?: string;
+  key?: string;
+  system?: string;
+  action?: string;
+  attribute: string;
+  body: string;
+  error?: boolean;
+  client?: string;
+  version?: string;
+}
+
+export class TracerLog implements ITracerLog {
   public timestamp: number;
 
   constructor(
@@ -88,21 +113,11 @@ export class TracerWrapper {
     private system: string,
     private key: string,
     private action: string,
-  ) {
-    this.tracer = tracer;
-    this.route = route;
-    this.system = system;
-    this.key = key;
-    this.action = action;
-  }
+    private client: string,
+    private version: string,
+  ) {}
 
-  public push = (
-    attribute: string,
-    body: string,
-    error: boolean = false,
-    client: string = '',
-    version: string = '',
-  ) => {
+  public push = (attribute: string, body: string, error: boolean = false) => {
     this.tracer.push(
       new TracerLog(
         this.route,
@@ -112,8 +127,24 @@ export class TracerWrapper {
         attribute,
         body,
         error,
-        client,
-        version,
+        this.client,
+        this.version,
+      ),
+    );
+  };
+
+  public send = (log: ITracerLogInput) => {
+    this.tracer.push(
+      new TracerLog(
+        log.route || this.route,
+        log.key || this.key,
+        log.system || this.system,
+        log.action || this.action,
+        log.attribute,
+        log.body,
+        log.error || false,
+        log.client || this.client,
+        log.version || this.version,
       ),
     );
   };
@@ -136,6 +167,7 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
   private tracer: Tracer;
   private options: TracerPluginOptions;
   private last: { key: string; action: string };
+  private client: { agent: string; version: string };
 
   constructor(options: TracerPluginOptions) {
     super();
@@ -143,6 +175,10 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
     this.last = {
       key: 'nothing',
       action: 'unknown',
+    };
+    this.client = {
+      agent: '',
+      version: '',
     };
   }
 
@@ -175,9 +211,17 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
         this.options.system,
         key,
         action,
+        this.client.agent,
+        this.client.version,
       );
     };
     return { tracer };
+  };
+
+  public begin = ({ request }: HandlerContext<TracerPluginAux>) => {
+    this.client.version = request.header('X-Version') || '0.0.0';
+    this.client.agent =
+      request.header('User-Agent') || request.context.identity.userAgent || '';
   };
 
   public end = () => this.tracer.flush();
