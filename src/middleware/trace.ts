@@ -13,32 +13,20 @@ import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
 const logger = getLogger(__filename);
 
 export class TracerLog {
-  public route: string;
   public timestamp: number;
-  public key: string;
-  public system: string;
-  public action: string;
-  public attribute: string;
-  public body: string;
-  public error: boolean;
 
   constructor(
-    route: string,
-    key: string,
-    system: string,
-    action: string,
-    attribute: string,
-    body: string,
-    error: boolean = false,
+    public route: string,
+    public key: string,
+    public system: string,
+    public action: string,
+    public attribute: string,
+    public body: string,
+    public error: boolean,
+    public client: string,
+    public version: string,
   ) {
-    this.route = route;
     this.timestamp = Date.now();
-    this.key = key;
-    this.system = system;
-    this.action = action;
-    this.attribute = attribute;
-    this.body = body;
-    this.error = error;
   }
 }
 
@@ -94,18 +82,12 @@ export class Tracer {
 }
 
 export class TracerWrapper {
-  private tracer: Tracer;
-  private route: string;
-  private system: string;
-  private key: string;
-  private action: string;
-
   constructor(
-    tracer: Tracer,
-    route: string,
-    system: string,
-    key: string,
-    action: string,
+    private tracer: Tracer,
+    private route: string,
+    private system: string,
+    private key: string,
+    private action: string,
   ) {
     this.tracer = tracer;
     this.route = route;
@@ -114,7 +96,13 @@ export class TracerWrapper {
     this.action = action;
   }
 
-  public push = (attribute: string, body: string, error: boolean = false) => {
+  public push = (
+    attribute: string,
+    body: string,
+    error: boolean = false,
+    client: string = '',
+    version: string = '',
+  ) => {
     this.tracer.push(
       new TracerLog(
         this.route,
@@ -124,6 +112,8 @@ export class TracerWrapper {
         attribute,
         body,
         error,
+        client,
+        version,
       ),
     );
   };
