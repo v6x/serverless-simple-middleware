@@ -1,7 +1,7 @@
 {
   "name": "serverless-simple-middleware",
   "description": "Simple middleware to translate the interface of lambda's handler to request => response",
-  "version": "0.0.30",
+  "version": "0.0.31",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "author": "VoyagerX",
