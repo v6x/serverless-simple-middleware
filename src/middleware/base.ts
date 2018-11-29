@@ -39,7 +39,9 @@ export class HandlerRequest {
   }
 
   public header(key: string) {
-    return this.event.headers[key] || this.event.headers[key.toLowerCase()];
+    return this.event.headers
+      ? this.event.headers[key] || this.event.headers[key.toLowerCase()]
+      : undefined;
   }
 
   public records<T, U>(selector?: (each: T) => U) {
