@@ -62,6 +62,7 @@ export class HandlerResponse {
     this.completed = false;
     this.corsHeaders = {
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'X-Version',
       'Access-Control-Allow-Credentials': true,
     };
   }
