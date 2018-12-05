@@ -223,8 +223,20 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
 
   public begin = ({ request }: HandlerContext<TracerPluginAux>) => {
     this.client.version = request.header('X-Version') || '0.0.0';
-    this.client.agent =
-      request.header('User-Agent') || request.context.identity.userAgent || '';
+    this.client.agent = (() => {
+      const fromHeader = request.header('User-Agent');
+      if (fromHeader) {
+        return fromHeader;
+      }
+      if (
+        request.context &&
+        request.context.identity &&
+        request.context.identity.userAgent
+      ) {
+        return request.context.identity.userAgent;
+      }
+      return '';
+    })();
   };
 
   public end = () => this.tracer.flush();
