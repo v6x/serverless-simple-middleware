@@ -1,4 +1,5 @@
 import * as AWS from 'aws-sdk'; // tslint:disable-line
+import { v4 as uuid4 } from 'uuid';
 import {
   AWSComponent,
   loadAWSConfig,
@@ -12,7 +13,8 @@ import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
 
 const logger = getLogger(__filename);
 
-export interface ITracerLog {
+interface ITracerLog {
+  uuid: string;
   timestamp: number;
   route: string;
   key: string;
@@ -25,7 +27,7 @@ export interface ITracerLog {
   version: string;
 }
 
-export interface ITracerLogInput {
+interface ITracerLogInput {
   route?: string;
   key?: string;
   system?: string;
@@ -38,19 +40,21 @@ export interface ITracerLogInput {
 }
 
 export class TracerLog implements ITracerLog {
-  public timestamp: number;
+  public readonly uuid: string;
+  public readonly timestamp: number;
 
   constructor(
-    public route: string,
-    public key: string,
-    public system: string,
-    public action: string,
-    public attribute: string,
-    public body: string,
-    public error: boolean,
-    public client: string,
-    public version: string,
+    public readonly route: string,
+    public readonly key: string,
+    public readonly system: string,
+    public readonly action: string,
+    public readonly attribute: string,
+    public readonly body: string,
+    public readonly error: boolean,
+    public readonly client: string,
+    public readonly version: string,
   ) {
+    this.uuid = uuid4();
     this.timestamp = Date.now();
   }
 }
@@ -85,7 +89,6 @@ export class Tracer {
       const eventQueueUrl = urlResult.QueueUrl;
 
       const chunkSize = 10;
-      let messageSerial = 0;
       for (let begin = 0; begin < this.buffer.length; begin += chunkSize) {
         const end = Math.min(this.buffer.length, begin + chunkSize);
         const subset = this.buffer.slice(begin, end);
@@ -93,7 +96,7 @@ export class Tracer {
           .sendMessageBatch({
             QueueUrl: eventQueueUrl,
             Entries: subset.map(each => ({
-              Id: `${each.key}_${each.timestamp}_${++messageSerial}`,
+              Id: `${each.key}_${each.uuid}`,
               MessageBody: JSON.stringify(each),
             })),
           })
