@@ -1,5 +1,4 @@
 import { middleware, MySQLPluginAux } from '../src';
-import { getLogger } from '../src/utils';
 
 test('basic', async () => {
   type Aux = MySQLPluginAux;
@@ -21,7 +20,7 @@ test('basic', async () => {
     }),
   ]);
 
-  await handler(async ({ request, response, aux }) => {
+  handler(async ({ request, response, aux }) => {
     const { db } = aux;
     expect(request).toBeDefined();
     expect(response).toBeDefined();

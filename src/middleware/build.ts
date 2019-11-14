@@ -53,7 +53,7 @@ class HandlerProxy<A extends HandlerAuxBase> {
   public call = async (
     middleware: HandlerMiddleware<A>,
     handler: Handler<A>,
-  ): Promise<any[]> => {
+  ) => {
     try {
       this.aux = await middleware.auxPromise;
     } catch (error) {
@@ -85,20 +85,23 @@ class HandlerProxy<A extends HandlerAuxBase> {
         handlers.map(each => this.safeCall(each, okResponsible, errorHandlers)),
       );
 
-    const result = [
+    const results = [
       ...(await iterate(beginHandlers)),
       ...(await iterate(actualHandler, true)),
       ...(await iterate(endHandlers)),
-    ];
+    ].filter(x => x);
     // In test phase, throws any exception if there was.
     if (process.env.NODE_ENV === 'test') {
-      for (const each of result) {
+      for (const each of results) {
         if (each instanceof Error) {
+          logger.error(`Error occurred: ${stringifyError(each)}`);
           throw each;
         }
       }
     }
-    return result;
+    results.forEach(result =>
+      logger.silly(`middleware result : ${JSON.stringify(result)}`),
+    );
   };
 
   private safeCall = async (
@@ -159,11 +162,12 @@ const build = <Aux extends HandlerAuxBase>(
   plugins: Array<HandlerPluginBase<any>>,
 ) => {
   const middleware = new HandlerMiddleware<Aux>(plugins);
-  return (handler: Handler<Aux>) => async (
+  return (handler: Handler<Aux>) => (
     event: any,
     context: any,
     callback: any,
-  ) =>
+  ) => {
     new HandlerProxy<Aux>(event, context, callback).call(middleware, handler);
+  };
 };
 export default build;
