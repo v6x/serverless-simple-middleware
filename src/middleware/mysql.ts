@@ -65,6 +65,48 @@ export class ConnectionProxy {
       return res[0];
     });
 
+  public beginTransaction = () =>
+    new Promise(async (resolve, reject) => {
+      const connection = this.prepareConnection();
+      await this.tryToInitializeSchema(false);
+
+      connection.beginTransaction((err: mysql.MysqlError) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+
+  public commit = () =>
+    new Promise(async (resolve, reject) => {
+      const connection = this.prepareConnection();
+      await this.tryToInitializeSchema(false);
+
+      connection.commit((err: mysql.MysqlError) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+
+  public rollback = () =>
+    new Promise(async (resolve, reject) => {
+      const connection = this.prepareConnection();
+      await this.tryToInitializeSchema(false);
+
+      connection.rollback((err: mysql.MysqlError) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+
   public clearConnection = () => {
     if (this.connection) {
       this.connection.end();
