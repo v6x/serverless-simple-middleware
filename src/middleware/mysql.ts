@@ -66,7 +66,7 @@ export class ConnectionProxy {
     });
 
   public beginTransaction = () =>
-    new Promise(async (resolve, reject) => {
+    new Promise<void>(async (resolve, reject) => {
       const connection = this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
@@ -80,7 +80,7 @@ export class ConnectionProxy {
     });
 
   public commit = () =>
-    new Promise(async (resolve, reject) => {
+    new Promise<void>(async (resolve, reject) => {
       const connection = this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
@@ -94,7 +94,7 @@ export class ConnectionProxy {
     });
 
   public rollback = () =>
-    new Promise(async (resolve, reject) => {
+    new Promise<void>(async (resolve, reject) => {
       const connection = this.prepareConnection();
       await this.tryToInitializeSchema(false);
 

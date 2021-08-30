@@ -56,6 +56,7 @@ export class HandlerResponse {
   public result: any | Promise<any> | undefined;
 
   private corsHeaders: { [header: string]: any };
+  private cookieHeaders: { [key: string]: string };
 
   constructor(callback: any) {
     this.callback = callback;
@@ -65,13 +66,23 @@ export class HandlerResponse {
       'Access-Control-Allow-Headers': 'X-Version',
       'Access-Control-Allow-Credentials': true,
     };
+    this.cookieHeaders = {};
   }
 
   public ok(body = {}, code = 200) {
     logger.stupid(`ok`, body);
+    const headers = {
+      ...this.corsHeaders,
+    };
+    const cookieStr = Object.keys(this.cookieHeaders)
+      .map((key: string) => `${key}=${this.cookieHeaders[key]}`)
+      .join('; ');
+    if (cookieStr.length > 0) {
+      headers['Set-Cookie'] = cookieStr;
+    }
     const result = this.callback(null, {
       statusCode: code,
-      headers: this.corsHeaders,
+      headers,
       body: JSON.stringify(body),
     });
     this.completed = true;
@@ -87,6 +98,10 @@ export class HandlerResponse {
     });
     this.completed = true;
     return result;
+  }
+
+  public addCookie(key: string, value: string) {
+    this.cookieHeaders[key] = value;
   }
 }
 
