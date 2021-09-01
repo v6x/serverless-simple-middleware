@@ -56,7 +56,7 @@ export class HandlerResponse {
   public result: any | Promise<any> | undefined;
 
   private corsHeaders: { [header: string]: any };
-  private cookieHeaders: { [key: string]: string };
+  private cookies: string[];
 
   constructor(callback: any) {
     this.callback = callback;
@@ -66,7 +66,7 @@ export class HandlerResponse {
       'Access-Control-Allow-Headers': 'X-Version',
       'Access-Control-Allow-Credentials': true,
     };
-    this.cookieHeaders = {};
+    this.cookies = [];
   }
 
   public ok(body = {}, code = 200) {
@@ -74,15 +74,14 @@ export class HandlerResponse {
     const headers = {
       ...this.corsHeaders,
     };
-    const cookieStr = Object.keys(this.cookieHeaders)
-      .map((key: string) => `${key}=${this.cookieHeaders[key]}`)
-      .join('; ');
-    if (cookieStr.length > 0) {
-      headers['Set-Cookie'] = cookieStr;
+    let multiValueHeaders = undefined;
+    if (this.cookies.length > 0) {
+      multiValueHeaders = { 'Set-Cookie': this.cookies };
     }
     const result = this.callback(null, {
       statusCode: code,
       headers,
+      multiValueHeaders,
       body: JSON.stringify(body),
     });
     this.completed = true;
@@ -100,8 +99,11 @@ export class HandlerResponse {
     return result;
   }
 
-  public addCookie(key: string, value: string) {
-    this.cookieHeaders[key] = value;
+  public addCookie(key: string, value: string, domain?: string) {
+    const keyValueStr = `${key}=${value}`;
+    const domainStr = domain ? `Domain=${domain}` : '';
+    const cookieStr = [keyValueStr, domainStr].filter(x => x).join('; ');
+    this.cookies.push(cookieStr);
   }
 }
 
