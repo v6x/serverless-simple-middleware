@@ -290,6 +290,27 @@ export class SimpleAWS {
     };
   };
 
+  public getSignedCookie = (
+    keyPairId: string,
+    privateKey: string,
+    url: string,
+    expires: number,
+  ): AWS.CloudFront.Signer.CustomPolicy => {
+    const signer = new AWS.CloudFront.Signer(keyPairId, privateKey);
+    const policy = {
+      Statement: [
+        {
+          Resource: url,
+          Condition: {
+            DateLessThan: { 'AWS:EpochTime': expires },
+          },
+        },
+      ],
+    };
+    const ret = signer.getSignedCookie({ policy: JSON.stringify(policy) });
+    return ret;
+  };
+
   public getAttachmentUrl = (
     bucketName: string,
     key: string,
