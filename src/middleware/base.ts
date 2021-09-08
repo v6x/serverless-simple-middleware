@@ -57,6 +57,7 @@ export class HandlerResponse {
 
   private corsHeaders: { [header: string]: any };
   private cookies: string[];
+  private crossOrigin?: string;
 
   constructor(callback: any) {
     this.callback = callback;
@@ -74,6 +75,9 @@ export class HandlerResponse {
     const headers = {
       ...this.corsHeaders,
     };
+    if (this.crossOrigin) {
+      headers['Access-Control-Allow-Origin'] = this.crossOrigin;
+    }
     let multiValueHeaders = undefined;
     if (this.cookies.length > 0) {
       multiValueHeaders = { 'Set-Cookie': this.cookies };
@@ -99,14 +103,25 @@ export class HandlerResponse {
     return result;
   }
 
-  public addCookie(key: string, value: string, domain?: string, specifyCrossOrigin?: true) {
+  public addCookie(
+    key: string,
+    value: string,
+    domain?: string,
+    specifyCrossOrigin?: true,
+  ) {
     const keyValueStr = `${key}=${value}`;
     const domainStr = domain ? `Domain=${domain}` : '';
     const sameSiteStr = specifyCrossOrigin ? 'SameSite=None' : '';
     const secureStr = specifyCrossOrigin ? 'Secure' : '';
-    const cookieStr = [keyValueStr, domainStr, sameSiteStr, secureStr].filter(x => x).join('; ');
+    const cookieStr = [keyValueStr, domainStr, sameSiteStr, secureStr]
+      .filter(x => x)
+      .join('; ');
     this.cookies.push(cookieStr);
   }
+
+  public setCrossOrigin = (origin?: string) => {
+    this.crossOrigin = origin;
+  };
 }
 
 export interface HandlerAuxBase {
