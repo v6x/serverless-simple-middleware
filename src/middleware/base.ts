@@ -99,10 +99,12 @@ export class HandlerResponse {
     return result;
   }
 
-  public addCookie(key: string, value: string, domain?: string) {
+  public addCookie(key: string, value: string, domain?: string, specifyCrossOrigin?: true) {
     const keyValueStr = `${key}=${value}`;
     const domainStr = domain ? `Domain=${domain}` : '';
-    const cookieStr = [keyValueStr, domainStr].filter(x => x).join('; ');
+    const sameSiteStr = specifyCrossOrigin ? 'SameSite=None' : '';
+    const secureStr = specifyCrossOrigin ? 'Secure' : '';
+    const cookieStr = [keyValueStr, domainStr, sameSiteStr, secureStr].filter(x => x).join('; ');
     this.cookies.push(cookieStr);
   }
 }
