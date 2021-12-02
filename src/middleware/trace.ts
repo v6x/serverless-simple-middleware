@@ -103,6 +103,8 @@ export class Tracer {
           .promise();
         logger.stupid(`sendBatchResult`, sendBatchResult);
       }
+
+      this.buffer = [];
     } catch (error) {
       logger.warn(`Error in eventSource: ${error}`);
     }
