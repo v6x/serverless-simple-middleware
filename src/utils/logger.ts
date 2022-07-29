@@ -37,8 +37,8 @@ const severity = (level: LogLevel) => {
 export const currentLogLevel = $enum(LogLevel).asValueOrDefault(
   process.env.LOG_LEVEL,
   currentStage.level !== StagingLevel.Release
-    ? LogLevel.Verbose
-    : LogLevel.Debug,
+    ? LogLevel.Silly
+    : LogLevel.Verbose,
 );
 
 type LogMessage = string | Error;
