@@ -3297,10 +3297,10 @@ signal-exit@^3.0.0, signal-exit@^3.0.2:
   resolved "https://registry.yarnpkg.com/signal-exit/-/signal-exit-3.0.2.tgz#b5fdc08f1287ea1178628e415e25132b73646c6d"
   integrity sha1-tf3AjxKH6hF4Yo5BXiUTK3NkbG0=
 
-simple-staging@^0.0.6:
-  version "0.0.6"
-  resolved "https://registry.yarnpkg.com/simple-staging/-/simple-staging-0.0.6.tgz#c1f4176c294f58553c43333216b78ea8e22164d8"
-  integrity sha512-Ua7WE2exK5tU+MdwaqMptdLGZXkMcCLM2rNLh9MYkDzLqquAr5SN8E4asSqD6XJJzGZYDOpvILvV7nLaihlw5Q==
+simple-staging@^0.0.12:
+  version "0.0.12"
+  resolved "https://registry.yarnpkg.com/simple-staging/-/simple-staging-0.0.12.tgz#9c4d3f209a9780c0053a9d3778207c714f6e5749"
+  integrity sha512-8v0hKeE99Qwjjt06gGQ5mnnNVCyPaxA3z4ulOpCDh0OvbUmpKFk3T8vzCEdY73nOnvOVCqkTuPIHapAm0GdYkA==
   dependencies:
     ts-enum-util "^3.1.0"
 
