@@ -108,12 +108,14 @@ export class HandlerResponse {
     value: string,
     domain?: string,
     specifyCrossOrigin?: true,
+    path?: string,
   ) {
     const keyValueStr = `${key}=${value}`;
     const domainStr = domain ? `Domain=${domain}` : '';
     const sameSiteStr = specifyCrossOrigin ? 'SameSite=None' : '';
     const secureStr = specifyCrossOrigin ? 'Secure' : '';
-    const cookieStr = [keyValueStr, domainStr, sameSiteStr, secureStr]
+    const pathStr = path !== undefined ? `Path=${path}` : '';
+    const cookieStr = [keyValueStr, domainStr, sameSiteStr, secureStr, pathStr]
       .filter(x => x)
       .join('; ');
     this.cookies.push(cookieStr);
