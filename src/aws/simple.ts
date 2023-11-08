@@ -250,6 +250,7 @@ export class SimpleAWS {
       .createReadStream();
     return new Promise<string>((resolve, reject) =>
       stream
+        .on('error', error => reject(error))
         .pipe(fs.createWriteStream(localPath))
         .on('finish', () => resolve(localPath))
         .on('error', error => reject(error)),
