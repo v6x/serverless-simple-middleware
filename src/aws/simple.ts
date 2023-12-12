@@ -1,7 +1,9 @@
 import * as AWS from 'aws-sdk'; // tslint:disable-line
 import * as fs from 'fs';
+import * as os from 'os';
+import { nanoid } from 'nanoid/non-secure';
 
-import { getLogger } from '../utils';
+import { getLogger, stringifyError } from '../utils';
 import { SimpleAWSConfig } from './config';
 
 import {
@@ -237,16 +239,13 @@ export class SimpleAWS {
   };
 
   public download = async (
-    bucketName: string,
+    bucket: string,
     key: string,
     localPath: string,
   ): Promise<string> => {
-    logger.debug(`Get a stream of item[${key}] from bucket[${bucketName}]`);
+    logger.debug(`Get a stream of item[${key}] from bucket[${bucket}]`);
     const stream = this.s3
-      .getObject({
-        Bucket: bucketName,
-        Key: key,
-      })
+      .getObject({ Bucket: bucket, Key: key })
       .createReadStream();
     return new Promise<string>((resolve, reject) =>
       stream
@@ -257,21 +256,71 @@ export class SimpleAWS {
     );
   };
 
+  public readFile = async (bucket: string, key: string): Promise<string> => {
+    logger.debug(`Read item[${key}] from bucket[${bucket}]`);
+    const tempFile = `${os.tmpdir()}/${nanoid()}`;
+    try {
+      await this.download(bucket, key, tempFile);
+      const content = await fs.promises.readFile(tempFile, {
+        encoding: 'utf-8',
+      });
+      return content;
+    } finally {
+      if (!fs.existsSync(tempFile)) {
+        fs.unlink(tempFile, error => {
+          if (!error) {
+            return;
+          }
+          const msg = `Error during readFile: unlink ${tempFile}: ${stringifyError(
+            error,
+          )}`;
+          logger.error(msg);
+        });
+      }
+    }
+  };
+
   public upload = async (
-    bucketName: string,
+    bucket: string,
     localPath: string,
     key: string,
   ): Promise<string> => {
-    logger.debug(`Upload item[${key}] into bucket[${bucketName}]`);
+    logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
     const putResult = await this.s3
       .upload({
-        Bucket: bucketName,
+        Bucket: bucket,
         Key: key,
         Body: fs.createReadStream(localPath),
       })
       .promise();
     logger.stupid(`putResult`, putResult);
     return key;
+  };
+
+  public writeFile = async (
+    bucket: string,
+    key: string,
+    content: string,
+  ): Promise<void> => {
+    logger.debug(`Write item[${key}] into bucket[${bucket}]`);
+    const tempFile = `${os.tmpdir()}/${nanoid()}`;
+    try {
+      await fs.promises.writeFile(tempFile, content, 'utf-8');
+      await this.upload(bucket, tempFile, key);
+    } finally {
+      if (!fs.existsSync(tempFile)) {
+        return;
+      }
+      fs.unlink(tempFile, error => {
+        if (!error) {
+          return;
+        }
+        const msg = `Error during writeFile: unlink file ${tempFile}: ${stringifyError(
+          error,
+        )}`;
+        logger.error(msg);
+      });
+    }
   };
 
   public getSignedUrl = (
