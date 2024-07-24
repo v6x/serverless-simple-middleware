@@ -266,16 +266,14 @@ export class SimpleAWS {
       });
       return content;
     } finally {
-      if (!fs.existsSync(tempFile)) {
-        fs.unlink(tempFile, error => {
-          if (!error) {
-            return;
-          }
-          const msg = `Error during readFile: unlink ${tempFile}: ${stringifyError(
-            error,
-          )}`;
-          logger.error(msg);
-        });
+      if (fs.existsSync(tempFile)) {
+        try {
+          await fs.promises.unlink(tempFile);
+        } catch (error) {
+          logger.error(
+            `Failed to delete temp file ${tempFile}: ${stringifyError(error)}`,
+          );
+        }
       }
     }
   };
