@@ -278,6 +278,24 @@ export class SimpleAWS {
     }
   };
 
+  public readFileBuffer = async (
+    bucket: string,
+    key: string,
+  ): Promise<Buffer> => {
+    logger.debug(`Read item[${key}] from bucket[${bucket}]`);
+    const params = {
+      Bucket: bucket,
+      Key: key,
+    };
+
+    const data = await this.s3.getObject(params).promise();
+    if (data.Body) {
+      return data.Body as Buffer;
+    } else {
+      throw new Error(`Failed to read file ${key} from bucket ${bucket}`);
+    }
+  };
+
   public upload = async (
     bucket: string,
     localPath: string,
