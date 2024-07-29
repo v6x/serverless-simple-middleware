@@ -38,7 +38,7 @@
     "uuid": "^3.3.2"
   },
   "optionalDependencies": {
-    "aws-sdk": "^2.288.0"
+    "aws-sdk": "2.1664.0"
   },
   "devDependencies": {
     "@types/jest": "^23.3.1",
