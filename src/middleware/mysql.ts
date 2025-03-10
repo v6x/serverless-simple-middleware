@@ -1,3 +1,4 @@
+import { Kysely, MysqlDialect, MysqlPool } from 'kysely';
 import * as mysql from 'mysql';
 
 import { getLogger } from '../utils';
@@ -127,7 +128,7 @@ export class ConnectionProxy {
   };
 
   private changeDatabase = (dbName: string) =>
-    new Promise((resolve, reject) =>
+    new Promise<void>((resolve, reject) =>
       this.prepareConnection().changeUser(
         {
           database: dbName,
@@ -182,21 +183,80 @@ export class ConnectionProxy {
   };
 }
 
-export interface MySQLPluginAux extends HandlerAuxBase {
-  db: ConnectionProxy;
+interface LazyMysqlPoolConnection extends mysql.Connection {
+  release: () => void;
 }
 
-export class MySQLPlugin extends HandlerPluginBase<MySQLPluginAux> {
+class LazyConnectionPool implements MysqlPool {
+  private connection: LazyMysqlPoolConnection | null = null;
+
+  constructor(private config: mysql.ConnectionConfig) {}
+
+  public getConnection = (
+    callback: (error: unknown, connection: LazyMysqlPoolConnection) => void,
+  ): void => {
+    if (this.connection) {
+      callback(null, this.connection);
+      return;
+    }
+    const conn = mysql.createConnection(this.config);
+    conn.connect((err: mysql.MysqlError) => {
+      if (err) {
+        callback(err, {} as LazyMysqlPoolConnection);
+        return;
+      }
+      this.connection = this.addDummyRelease(conn);
+      callback(null, this.connection);
+    });
+  };
+
+  public end = (callback: (error: unknown) => void): void => {
+    if (this.connection) {
+      this.connection.end((err: mysql.MysqlError) => {
+        this.connection = null;
+        callback(err);
+      });
+    } else {
+      callback(null);
+    }
+  };
+
+  private addDummyRelease = (
+    connection: mysql.Connection,
+  ): LazyMysqlPoolConnection =>
+    new Proxy(connection, {
+      get(target, prop, receiver) {
+        return prop === 'release'
+          ? () => {}
+          : Reflect.get(target, prop, receiver);
+      },
+    }) as LazyMysqlPoolConnection;
+}
+
+export interface MySQLPluginAux<T = unknown> extends HandlerAuxBase {
+  db: ConnectionProxy;
+  database: Kysely<T>;
+}
+
+export class MySQLPlugin<T = unknown> extends HandlerPluginBase<
+  MySQLPluginAux<T>
+> {
   private proxy: ConnectionProxy;
+  private database: Kysely<T>;
 
   constructor(options: MySQLPluginOptions) {
     super();
     this.proxy = new ConnectionProxy(options);
+    this.database = new Kysely<T>({
+      dialect: new MysqlDialect({
+        pool: () => Promise.resolve(new LazyConnectionPool(options.config)),
+      }),
+    });
   }
 
   public create = async () => {
     await this.proxy.onPluginCreated();
-    return { db: this.proxy };
+    return { db: this.proxy, database: this.database };
   };
 
   public end = () => {
@@ -206,5 +266,6 @@ export class MySQLPlugin extends HandlerPluginBase<MySQLPluginAux> {
   };
 }
 
-const build = (options: MySQLPluginOptions) => new MySQLPlugin(options);
+const build = <T = unknown>(options: MySQLPluginOptions) =>
+  new MySQLPlugin<T>(options);
 export default build;
