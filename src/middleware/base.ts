@@ -1,5 +1,5 @@
 import * as awsTypes from 'aws-lambda'; // tslint:disable-line:no-implicit-dependencies
-import { getLogger } from '../utils/logger';
+import { getLogger } from '../utils/index.js';
 
 const logger = getLogger(__filename);
 

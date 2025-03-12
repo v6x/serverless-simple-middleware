@@ -3,15 +3,16 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { nanoid } from 'nanoid/non-secure';
 
-import { getLogger, stringifyError } from '../utils';
-import { SimpleAWSConfig } from './config';
+import { getLogger } from '../utils/index.js';
+import { SimpleAWSConfig } from './index.js';
 
 import {
   AWSComponent,
   S3SignedUrlParams,
   S3SignedUrlResult,
   SQSMessageBody,
-} from './define';
+} from './define.js';
+import { stringifyError } from '../utils/index.js';
 
 const logger = getLogger(__filename);
 
@@ -307,6 +308,23 @@ export class SimpleAWS {
         Bucket: bucket,
         Key: key,
         Body: fs.createReadStream(localPath),
+      })
+      .promise();
+    logger.stupid(`putResult`, putResult);
+    return key;
+  };
+
+  public uploadFromBuffer = async (
+    bucket: string,
+    key: string,
+    buffer: Buffer,
+  ): Promise<string> => {
+    logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
+    const putResult = await this.s3
+      .upload({
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
       })
       .promise();
     logger.stupid(`putResult`, putResult);

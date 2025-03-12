@@ -1,7 +1,7 @@
 import { basename } from 'path';
 import { envDefault as currentStage, StagingLevel } from 'simple-staging';
 import { $enum } from 'ts-enum-util';
-import { stringifyError } from './misc';
+import { stringifyError } from './index.js';
 
 export enum LogLevel {
   Error = 'error',

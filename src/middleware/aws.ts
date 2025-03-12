@@ -3,9 +3,9 @@ import {
   SimpleAWS,
   SimpleAWSConfig,
   SimpleAWSConfigLoadParam,
-} from '../aws';
-import { getLogger } from '../utils';
-import { HandlerAuxBase, HandlerPluginBase } from './base';
+} from '../aws/index.js';
+import { getLogger } from '../utils/index.js';
+import { HandlerAuxBase, HandlerPluginBase } from './index.js';
 
 const logger = getLogger(__filename);
 

@@ -1,9 +1,9 @@
-import build from './build';
+import build from './build.js';
 
-import aws from './aws';
-import logger from './logger';
-import mysql from './mysql';
-import trace from './trace';
+import aws from './aws.js';
+import logger from './logger.js';
+import mysql from './mysql.js';
+import trace from './trace.js';
 
 export const middleware = {
   build,
@@ -13,8 +13,8 @@ export const middleware = {
   mysql,
 };
 
-export * from './base';
-export * from './aws';
-export * from './trace';
-export * from './logger';
-export * from './mysql';
+export * from './base.js';
+export * from './aws.js';
+export * from './trace.js';
+export * from './logger.js';
+export * from './mysql.js';
