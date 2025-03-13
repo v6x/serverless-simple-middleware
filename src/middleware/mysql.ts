@@ -249,7 +249,7 @@ export class MySQLPlugin<T = unknown> extends HandlerPluginBase<
     this.proxy = new ConnectionProxy(options);
     this.queryBuilder = new Kysely<T>({
       dialect: new MysqlDialect({
-        pool: () => Promise.resolve(new LazyConnectionPool(options.config)),
+        pool: new LazyConnectionPool(options.config),
       }),
     });
   }
