@@ -233,21 +233,23 @@ class LazyConnectionPool implements MysqlPool {
     }) as LazyMysqlPoolConnection;
 }
 
+export type SQLClient<T = unknown> = Kysely<T>;
+
 export interface MySQLPluginAux<T = unknown> extends HandlerAuxBase {
   db: ConnectionProxy;
-  database: Kysely<T>;
+  database: SQLClient<T>;
 }
 
 export class MySQLPlugin<T = unknown> extends HandlerPluginBase<
   MySQLPluginAux<T>
 > {
   private proxy: ConnectionProxy;
-  private queryBuilder: Kysely<T>;
+  private sqlClient: SQLClient<T>;
 
   constructor(options: MySQLPluginOptions) {
     super();
     this.proxy = new ConnectionProxy(options);
-    this.queryBuilder = new Kysely<T>({
+    this.sqlClient = new Kysely<T>({
       dialect: new MysqlDialect({
         pool: new LazyConnectionPool(options.config),
       }),
@@ -256,7 +258,7 @@ export class MySQLPlugin<T = unknown> extends HandlerPluginBase<
 
   public create = async () => {
     await this.proxy.onPluginCreated();
-    return { db: this.proxy, database: this.queryBuilder };
+    return { db: this.proxy, database: this.sqlClient };
   };
 
   public end = () => {
@@ -264,8 +266,8 @@ export class MySQLPlugin<T = unknown> extends HandlerPluginBase<
       this.proxy.clearConnection();
     }
 
-    if (this.queryBuilder) {
-      this.queryBuilder.destroy();
+    if (this.sqlClient) {
+      this.sqlClient.destroy();
     }
   };
 }
