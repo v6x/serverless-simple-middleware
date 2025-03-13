@@ -7,7 +7,7 @@ import {
   HandlerPluginBase,
   HandlerRequest,
   HandlerResponse,
-} from './index.js';
+} from './base.js';
 
 const logger = getLogger(__filename);
 

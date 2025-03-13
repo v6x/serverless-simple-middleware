@@ -9,7 +9,7 @@ import {
 import { getLogger } from '../utils/index.js';
 import { stringifyError } from '../utils/index.js';
 import { $enum } from 'ts-enum-util';
-import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './index.js';
+import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base.js';
 
 const logger = getLogger(__filename);
 

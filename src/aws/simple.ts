@@ -4,7 +4,7 @@ import * as os from 'os';
 import { nanoid } from 'nanoid/non-secure';
 
 import { getLogger } from '../utils/index.js';
-import { SimpleAWSConfig } from './index.js';
+import { SimpleAWSConfig } from './config.js';
 
 import {
   AWSComponent,

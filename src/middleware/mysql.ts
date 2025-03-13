@@ -2,7 +2,7 @@ import { Kysely, MysqlDialect, MysqlPool } from 'kysely';
 import * as mysql from 'mysql';
 
 import { getLogger } from '../utils/index.js';
-import { HandlerAuxBase, HandlerPluginBase } from './index.js';
+import { HandlerAuxBase, HandlerPluginBase } from './base.js';
 
 const logger = getLogger(__filename);
 
