@@ -242,12 +242,12 @@ export class MySQLPlugin<T = unknown> extends HandlerPluginBase<
   MySQLPluginAux<T>
 > {
   private proxy: ConnectionProxy;
-  private database: Kysely<T>;
+  private queryBuilder: Kysely<T>;
 
   constructor(options: MySQLPluginOptions) {
     super();
     this.proxy = new ConnectionProxy(options);
-    this.database = new Kysely<T>({
+    this.queryBuilder = new Kysely<T>({
       dialect: new MysqlDialect({
         pool: () => Promise.resolve(new LazyConnectionPool(options.config)),
       }),
@@ -256,12 +256,16 @@ export class MySQLPlugin<T = unknown> extends HandlerPluginBase<
 
   public create = async () => {
     await this.proxy.onPluginCreated();
-    return { db: this.proxy, database: this.database };
+    return { db: this.proxy, database: this.queryBuilder };
   };
 
   public end = () => {
     if (this.proxy) {
       this.proxy.clearConnection();
+    }
+
+    if (this.queryBuilder) {
+      this.queryBuilder.destroy();
     }
   };
 }
