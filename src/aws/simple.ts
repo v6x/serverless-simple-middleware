@@ -313,6 +313,23 @@ export class SimpleAWS {
     return key;
   };
 
+  public uploadFromBuffer = async (
+    bucket: string,
+    key: string,
+    buffer: Buffer,
+  ): Promise<string> => {
+    logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
+    const putResult = await this.s3
+      .upload({
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
+      })
+      .promise();
+    logger.stupid(`putResult`, putResult);
+    return key;
+  };
+
   public writeFile = async (
     bucket: string,
     key: string,
