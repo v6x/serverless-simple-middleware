@@ -1,5 +1,5 @@
 import * as awsTypes from 'aws-lambda'; // tslint:disable-line:no-implicit-dependencies
-import { getLogger } from '../utils/logger';
+import { getLogger } from '../utils/index.js';
 
 const logger = getLogger(__filename);
 
@@ -8,7 +8,7 @@ export interface RequestAuxBase {
 }
 
 export class HandlerRequest {
-  public event: awsTypes.APIGatewayEvent;
+  public event: awsTypes.APIGatewayProxyEvent;
   public context: awsTypes.APIGatewayEventRequestContext;
   public lastError: Error | string | undefined;
 
@@ -30,11 +30,11 @@ export class HandlerRequest {
     return this.lazyBody || {};
   }
 
-  get path(): { [key: string]: string } {
+  get path(): { [key: string]: string | undefined } {
     return this.event.pathParameters || {};
   }
 
-  get query(): { [key: string]: string } {
+  get query(): { [key: string]: string | undefined } {
     return this.event.queryStringParameters || {};
   }
 

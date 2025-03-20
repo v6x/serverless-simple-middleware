@@ -5,11 +5,11 @@ import {
   loadAWSConfig,
   SimpleAWS,
   SimpleAWSConfigLoadParam,
-} from '../aws';
-import { getLogger, stringifyError } from '../utils';
-
+} from '../aws/index.js';
+import { getLogger } from '../utils/index.js';
+import { stringifyError } from '../utils/index.js';
 import { $enum } from 'ts-enum-util';
-import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
+import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base.js';
 
 const logger = getLogger(__filename);
 
