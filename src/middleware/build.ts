@@ -1,13 +1,13 @@
-import { getLogger } from '../utils/index.js';
+import { getLogger } from '../utils/logger';
 
-import { stringifyError } from '../utils/index.js';
+import { stringifyError } from '../utils';
 import {
   Handler,
   HandlerAuxBase,
   HandlerPluginBase,
   HandlerRequest,
   HandlerResponse,
-} from './base.js';
+} from './base';
 
 const logger = getLogger(__filename);
 

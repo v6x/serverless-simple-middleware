@@ -3,16 +3,15 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { nanoid } from 'nanoid/non-secure';
 
-import { getLogger } from '../utils/index.js';
-import { SimpleAWSConfig } from './config.js';
+import { getLogger, stringifyError } from '../utils';
+import { SimpleAWSConfig } from './config';
 
 import {
   AWSComponent,
   S3SignedUrlParams,
   S3SignedUrlResult,
   SQSMessageBody,
-} from './define.js';
-import { stringifyError } from '../utils/index.js';
+} from './define';
 
 const logger = getLogger(__filename);
 

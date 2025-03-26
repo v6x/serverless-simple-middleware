@@ -1,5 +1,5 @@
-import { getLogger, Logger, LogLevel } from '../utils/index.js';
-import { HandlerAuxBase, HandlerPluginBase } from './base.js';
+import { getLogger, Logger, LogLevel } from '../utils';
+import { HandlerAuxBase, HandlerPluginBase } from './base';
 
 export interface LoggerPluginOptions {
   name: string;

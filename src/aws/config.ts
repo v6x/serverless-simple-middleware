@@ -1,7 +1,7 @@
 import fetch from 'cross-fetch';
 import * as fs from 'fs';
 
-import { AWSComponent } from './index.js';
+import { AWSComponent } from './define';
 
 export interface AWSConfig {
   [key: string]: string | boolean | number | undefined;

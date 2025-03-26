@@ -1,3 +1,3 @@
-export * from './define.js';
-export * from './config.js';
-export * from './simple.js';
+export * from './define';
+export * from './config';
+export * from './simple';

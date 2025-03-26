@@ -1,3 +1,3 @@
-export * from './aws/index.js';
-export * from './middleware/index.js';
-export * from './utils/index.js';
+export * from './aws';
+export * from './middleware';
+export * from './utils';

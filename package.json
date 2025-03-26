@@ -1,10 +1,9 @@
 {
   "name": "serverless-simple-middleware",
   "description": "Simple middleware to translate the interface of lambda's handler to request => response",
-  "version": "0.0.59",
+  "version": "0.0.58",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
   "author": "VoyagerX",
   "license": "MIT",
   "repository": {
@@ -20,7 +19,6 @@
   "homepage": "https://github.com/v6x/serverless-simple-middleware#readme",
   "scripts": {
     "lint": "tslint --project tsconfig.json",
-    "clean": "rm -rf node_modules && yarn",
     "build": "tsc --project tsconfig.json",
     "build:watch": "tsc --project tsconfig.json --watch",
     "test": "jest --config jest.config.js",
@@ -31,13 +29,12 @@
     "@types/aws-lambda": "8",
     "@types/mysql": "^2.15.5",
     "cross-fetch": "^2.2.2",
-    "kysely": "^0.27.6",
     "mysql": "^2.16.0",
     "nanoid": "4.0.2",
     "p-limit": "^2.0.0",
     "simple-staging": "^0.0.12",
     "ts-enum-util": "^3.1.0",
-    "typescript": "5.3.3",
+    "typescript": "^3.0.1",
     "uuid": "^3.3.2"
   },
   "optionalDependencies": {
