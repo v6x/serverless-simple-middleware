@@ -1,4 +1,5 @@
-import * as AWS from 'aws-sdk'; // tslint:disable-line
+import { getSignedCookies } from '@aws-sdk/cloudfront-signer';
+
 import * as fs from 'fs';
 import * as os from 'os';
 import { nanoid } from 'nanoid/non-secure';
@@ -12,16 +13,21 @@ import {
   S3SignedUrlResult,
   SQSMessageBody,
 } from './define';
+import { DynamoDB, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { GetObjectCommand, PutObjectCommand, S3 } from '@aws-sdk/client-s3';
+import { SQS } from '@aws-sdk/client-sqs';
+import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const logger = getLogger(__filename);
 
 export class SimpleAWS {
-  private queueUrls: { [queueName: string]: string };
+  private queueUrls: { [queueName: string]: string } = {};
   private config: SimpleAWSConfig;
-  private lazyS3: AWS.S3 | undefined;
-  private lazySqs: AWS.SQS | undefined;
-  private lazyDynamodb: AWS.DynamoDB.DocumentClient | undefined;
-  private lazyDynamodbAdmin: AWS.DynamoDB | undefined;
+  private lazyS3: S3 | undefined;
+  private lazySqs: SQS | undefined;
+  private lazyDynamodb: DynamoDBDocument | undefined;
+  private lazyDynamodbAdmin: DynamoDB | undefined;
 
   constructor(config?: SimpleAWSConfig) {
     this.config = config || new SimpleAWSConfig();
@@ -35,28 +41,31 @@ export class SimpleAWS {
 
   get s3() {
     if (this.lazyS3 === undefined) {
-      this.lazyS3 = new AWS.S3(this.config.get(AWSComponent.s3));
+      this.lazyS3 = new S3(this.config.get(AWSComponent.s3) || {});
     }
     return this.lazyS3;
   }
+
   get sqs() {
     if (this.lazySqs === undefined) {
-      this.lazySqs = new AWS.SQS(this.config.get(AWSComponent.sqs));
+      this.lazySqs = new SQS(this.config.get(AWSComponent.sqs) || {});
     }
     return this.lazySqs;
   }
+
   get dynamodb() {
     if (this.lazyDynamodb === undefined) {
-      this.lazyDynamodb = new AWS.DynamoDB.DocumentClient(
-        this.config.get(AWSComponent.dynamodb),
+      this.lazyDynamodb = DynamoDBDocument.from(
+        new DynamoDBClient(this.config.get(AWSComponent.dynamodb) || {}),
       );
     }
     return this.lazyDynamodb;
   }
+
   get dynamodbAdmin() {
     if (this.lazyDynamodbAdmin === undefined) {
-      this.lazyDynamodbAdmin = new AWS.DynamoDB(
-        this.config.get(AWSComponent.dynamodb),
+      this.lazyDynamodbAdmin = new DynamoDB(
+        this.config.get(AWSComponent.dynamodb) || {},
       );
     }
     return this.lazyDynamodbAdmin;
@@ -66,11 +75,9 @@ export class SimpleAWS {
     if (this.queueUrls[queueName] !== undefined) {
       return this.queueUrls[queueName];
     }
-    const urlResult = await this.sqs
-      .getQueueUrl({
-        QueueName: queueName,
-      })
-      .promise();
+    const urlResult = await this.sqs.getQueueUrl({
+      QueueName: queueName,
+    });
     logger.stupid(`urlResult`, urlResult);
     if (!urlResult.QueueUrl) {
       throw new Error(`No queue url with name[${queueName}]`);
@@ -82,26 +89,22 @@ export class SimpleAWS {
     logger.debug(`Send message[${data.key}] to queue.`);
     logger.stupid(`data`, data);
     const queueUrl = await this.getQueueUrl(queueName);
-    const sendResult = await this.sqs
-      .sendMessage({
-        QueueUrl: queueUrl,
-        MessageBody: JSON.stringify(data),
-        DelaySeconds: 0,
-      })
-      .promise();
+    const sendResult = await this.sqs.sendMessage({
+      QueueUrl: queueUrl,
+      MessageBody: JSON.stringify(data),
+      DelaySeconds: 0,
+    });
     logger.stupid(`sendResult`, sendResult);
 
-    const attrResult = await this.sqs
-      .getQueueAttributes({
-        QueueUrl: queueUrl,
-        AttributeNames: ['ApproximateNumberOfMessages'],
-      })
-      .promise();
+    const attrResult = await this.sqs.getQueueAttributes({
+      QueueUrl: queueUrl,
+      AttributeNames: ['ApproximateNumberOfMessages'],
+    });
     logger.stupid(`attrResult`, attrResult);
     if (!attrResult.Attributes) {
       return 0;
     }
-    return +attrResult.Attributes.ApproximateNumberOfMessages;
+    return +(attrResult.Attributes?.ApproximateNumberOfMessages || 0);
   };
 
   public dequeue = async <T>(
@@ -112,14 +115,12 @@ export class SimpleAWS {
   ): Promise<Array<SQSMessageBody<T>>> => {
     logger.debug(`Receive message from queue[${queueName}].`);
     const queueUrl = await this.getQueueUrl(queueName);
-    const receiveResult = await this.sqs
-      .receiveMessage({
-        QueueUrl: queueUrl,
-        MaxNumberOfMessages: fetchSize,
-        WaitTimeSeconds: waitSeconds,
-        VisibilityTimeout: visibilityTimeout,
-      })
-      .promise();
+    const receiveResult = await this.sqs.receiveMessage({
+      QueueUrl: queueUrl,
+      MaxNumberOfMessages: fetchSize,
+      WaitTimeSeconds: waitSeconds,
+      VisibilityTimeout: visibilityTimeout,
+    });
     logger.stupid(`receiveResult`, receiveResult);
     if (
       receiveResult.Messages === undefined ||
@@ -176,7 +177,7 @@ export class SimpleAWS {
     new Promise<string>(async (resolve, reject) => {
       logger.debug(`Change visibilityTimeout of ${handle} to ${seconds}secs.`);
       this.getQueueUrl(queueName)
-        .then(queueUrl => {
+        .then((queueUrl) => {
           this.sqs.changeMessageVisibility(
             {
               QueueUrl: queueUrl,
@@ -202,12 +203,10 @@ export class SimpleAWS {
   ): Promise<string> => {
     logger.debug(`Complete a message with handle[${handle}]`);
     const queueUrl = await this.getQueueUrl(queueName);
-    const deleteResult = await this.sqs
-      .deleteMessage({
-        QueueUrl: queueUrl,
-        ReceiptHandle: handle,
-      })
-      .promise();
+    const deleteResult = await this.sqs.deleteMessage({
+      QueueUrl: queueUrl,
+      ReceiptHandle: handle,
+    });
     logger.stupid(`deleteResult`, deleteResult);
     return handle;
   };
@@ -224,15 +223,13 @@ export class SimpleAWS {
       const end = Math.min(start + chunkSize, handles.length);
       const sublist = handles.slice(start, end);
       const queueUrl = await this.getQueueUrl(queueName);
-      const deletesResult = await this.sqs
-        .deleteMessageBatch({
-          QueueUrl: queueUrl,
-          Entries: sublist.map(handle => ({
-            Id: (++index).toString(),
-            ReceiptHandle: handle,
-          })),
-        })
-        .promise();
+      const deletesResult = await this.sqs.deleteMessageBatch({
+        QueueUrl: queueUrl,
+        Entries: sublist.map((handle) => ({
+          Id: (++index).toString(),
+          ReceiptHandle: handle,
+        })),
+      });
       logger.stupid(`deleteResult`, deletesResult);
     }
     return handles;
@@ -244,15 +241,13 @@ export class SimpleAWS {
     localPath: string,
   ): Promise<string> => {
     logger.debug(`Get a stream of item[${key}] from bucket[${bucket}]`);
-    const stream = this.s3
-      .getObject({ Bucket: bucket, Key: key })
-      .createReadStream();
+    const { Body } = await this.s3.getObject({ Bucket: bucket, Key: key });
     return new Promise<string>((resolve, reject) =>
-      stream
-        .on('error', error => reject(error))
+      (Body as NodeJS.ReadableStream)
+        .on('error', (error) => reject(error))
         .pipe(fs.createWriteStream(localPath))
         .on('finish', () => resolve(localPath))
-        .on('error', error => reject(error)),
+        .on('error', (error) => reject(error)),
     );
   };
 
@@ -288,9 +283,13 @@ export class SimpleAWS {
       Key: key,
     };
 
-    const data = await this.s3.getObject(params).promise();
+    const data = await this.s3.getObject(params);
     if (data.Body) {
-      return data.Body as Buffer;
+      const chunks: Buffer[] = [];
+      for await (const chunk of data.Body as NodeJS.ReadableStream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
     } else {
       throw new Error(`Failed to read file ${key} from bucket ${bucket}`);
     }
@@ -302,13 +301,11 @@ export class SimpleAWS {
     key: string,
   ): Promise<string> => {
     logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
-    const putResult = await this.s3
-      .upload({
-        Bucket: bucket,
-        Key: key,
-        Body: fs.createReadStream(localPath),
-      })
-      .promise();
+    const putResult = await this.s3.putObject({
+      Bucket: bucket,
+      Key: key,
+      Body: fs.createReadStream(localPath),
+    });
     logger.stupid(`putResult`, putResult);
     return key;
   };
@@ -319,13 +316,11 @@ export class SimpleAWS {
     buffer: Buffer,
   ): Promise<string> => {
     logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
-    const putResult = await this.s3
-      .upload({
-        Bucket: bucket,
-        Key: key,
-        Body: buffer,
-      })
-      .promise();
+    const putResult = await this.s3.putObject({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+    });
     logger.stupid(`putResult`, putResult);
     return key;
   };
@@ -344,7 +339,7 @@ export class SimpleAWS {
       if (!fs.existsSync(tempFile)) {
         return;
       }
-      fs.unlink(tempFile, error => {
+      fs.unlink(tempFile, (error) => {
         if (!error) {
           return;
         }
@@ -356,19 +351,30 @@ export class SimpleAWS {
     }
   };
 
-  public getSignedUrl = (
+  public getSignedUrl = async (
     bucketName: string,
     key: string,
     operation: 'getObject' | 'putObject' = 'getObject',
     params?: S3SignedUrlParams,
-  ): S3SignedUrlResult => {
+  ): Promise<S3SignedUrlResult> => {
+    const { Expires, ...filteredParams } = params || {};
+    const command =
+      operation === 'putObject'
+        ? new PutObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+            ...filteredParams,
+          })
+        : new GetObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+            ...filteredParams,
+          });
+
     return {
       key,
-      url: this.s3.getSignedUrl(operation, {
-        Bucket: bucketName,
-        Key: key,
-        Expires: 60 * 10,
-        ...(params || {}),
+      url: await getSignedUrl(this.s3, command, {
+        expiresIn: Expires || 60 * 10,
       }),
     };
   };
@@ -378,29 +384,22 @@ export class SimpleAWS {
     privateKey: string,
     url: string,
     expires: number,
-  ): AWS.CloudFront.Signer.CustomPolicy => {
-    const signer = new AWS.CloudFront.Signer(keyPairId, privateKey);
-    const policy = {
-      Statement: [
-        {
-          Resource: url,
-          Condition: {
-            DateLessThan: { 'AWS:EpochTime': expires },
-          },
-        },
-      ],
-    };
-    const ret = signer.getSignedCookie({ policy: JSON.stringify(policy) });
-    return ret;
+  ) => {
+    return getSignedCookies({
+      url,
+      keyPairId,
+      privateKey,
+      dateLessThan: new Date(expires * 1000),
+    });
   };
 
-  public getAttachmentUrl = (
+  public getAttachmentUrl = async (
     bucketName: string,
     key: string,
     fileName: string,
     params?: S3SignedUrlParams,
-  ): S3SignedUrlResult => {
-    return this.getSignedUrl(bucketName, key, 'getObject', {
+  ): Promise<S3SignedUrlResult> => {
+    return await this.getSignedUrl(bucketName, key, 'getObject', {
       ...params,
       ResponseContentDisposition: `attachment; filename="${fileName}"`,
     });
@@ -414,16 +413,14 @@ export class SimpleAWS {
     logger.debug(
       `Read an item with key[${JSON.stringify(key)}] from ${tableName}.`,
     );
-    const getResult = await this.dynamodb
-      .get({
-        TableName: tableName,
-        Key: key,
-      })
-      .promise();
+    const getResult = await this.dynamodb.get({
+      TableName: tableName,
+      Key: key,
+    });
     logger.stupid(`getResult`, getResult);
     const item: T | undefined =
       getResult !== undefined && getResult.Item !== undefined
-        ? ((getResult.Item as any) as T) // Casts forcefully.
+        ? (getResult.Item as any as T) // Casts forcefully.
         : defaultValue;
     logger.stupid(`item`, item);
     return item;
@@ -439,21 +436,19 @@ export class SimpleAWS {
     );
     logger.stupid(`keyValues`, columnValues);
     const expressions = Object.keys(columnValues)
-      .map(column => `${column} = :${column}`)
+      .map((column) => `${column} = :${column}`)
       .join(', ');
     const attributeValues = Object.keys(columnValues)
-      .map(column => [`:${column}`, columnValues[column]])
+      .map((column) => [`:${column}`, columnValues[column]])
       .reduce((obj, pair) => ({ ...obj, [pair[0]]: pair[1] }), {});
     logger.stupid(`expressions`, expressions);
     logger.stupid(`attributeValues`, attributeValues);
-    const updateResult = await this.dynamodb
-      .update({
-        TableName: tableName,
-        Key: key,
-        UpdateExpression: `set ${expressions}`,
-        ExpressionAttributeValues: attributeValues,
-      })
-      .promise();
+    const updateResult = await this.dynamodb.update({
+      TableName: tableName,
+      Key: key,
+      UpdateExpression: `set ${expressions}`,
+      ExpressionAttributeValues: attributeValues,
+    });
     logger.stupid(`updateResult`, updateResult);
     return updateResult;
   };
@@ -462,11 +457,9 @@ export class SimpleAWS {
 
   public setupQueue = async (queueName: string) => {
     try {
-      const listResult = await this.sqs
-        .listQueues({
-          QueueNamePrefix: queueName,
-        })
-        .promise();
+      const listResult = await this.sqs.listQueues({
+        QueueNamePrefix: queueName,
+      });
       if (listResult.QueueUrls) {
         for (const queueUrl of listResult.QueueUrls) {
           if (queueUrl.endsWith(queueName)) {
@@ -479,11 +472,9 @@ export class SimpleAWS {
       logger.debug(`No Queue[${queueName}] exists due to ${error}`);
     }
     logger.debug(`Create a queue[${queueName}] newly.`);
-    const createResult = await this.sqs
-      .createQueue({
-        QueueName: queueName,
-      })
-      .promise();
+    const createResult = await this.sqs.createQueue({
+      QueueName: queueName,
+    });
     logger.stupid(`createResult`, createResult);
     return true;
   };
@@ -496,10 +487,10 @@ export class SimpleAWS {
     },
   ) => {
     try {
-      const listResult = await this.s3.listBuckets().promise();
+      const listResult = await this.s3.listBuckets();
       if (
         listResult.Buckets &&
-        listResult.Buckets.map(each => each.Name).includes(bucketName)
+        listResult.Buckets.map((each) => each.Name).includes(bucketName)
       ) {
         logger.debug(`Bucket[${bucketName}] already exists.`);
         return true;
@@ -508,27 +499,23 @@ export class SimpleAWS {
       logger.debug(`No bucket[${bucketName}] exists due to ${error}`);
     }
     logger.debug(`Create a bucket[${bucketName}] newly.`);
-    const createResult = await this.s3
-      .createBucket({
-        Bucket: bucketName,
-      })
-      .promise();
+    const createResult = await this.s3.createBucket({
+      Bucket: bucketName,
+    });
     logger.stupid(`createResult`, createResult);
     if (cors) {
-      const corsResult = await this.s3
-        .putBucketCors({
-          Bucket: bucketName,
-          CORSConfiguration: {
-            CORSRules: [
-              {
-                AllowedHeaders: ['*'],
-                AllowedMethods: cors.methods,
-                AllowedOrigins: cors.origins,
-              },
-            ],
-          },
-        })
-        .promise();
+      const corsResult = await this.s3.putBucketCors({
+        Bucket: bucketName,
+        CORSConfiguration: {
+          CORSRules: [
+            {
+              AllowedHeaders: ['*'],
+              AllowedMethods: cors.methods,
+              AllowedOrigins: cors.origins,
+            },
+          ],
+        },
+      });
       logger.stupid(`corsResult`, corsResult);
     }
     return true;
@@ -536,7 +523,7 @@ export class SimpleAWS {
 
   public setupDynamoDb = async (tableName: string, keyColumn: string) => {
     try {
-      const listResult = await this.dynamodbAdmin.listTables().promise();
+      const listResult = await this.dynamodbAdmin.listTables();
       if (listResult.TableNames && listResult.TableNames.includes(tableName)) {
         logger.debug(`Table[${tableName}] already exists.`);
         return true;
@@ -545,19 +532,15 @@ export class SimpleAWS {
       logger.debug(`No table[${tableName}] exists due to ${error}`);
     }
     logger.debug(`Create a table[${tableName}] newly.`);
-    const createResult = await this.dynamodbAdmin
-      .createTable({
-        TableName: tableName,
-        KeySchema: [{ AttributeName: keyColumn, KeyType: 'HASH' }],
-        AttributeDefinitions: [
-          { AttributeName: keyColumn, AttributeType: 'S' },
-        ],
-        ProvisionedThroughput: {
-          ReadCapacityUnits: 30,
-          WriteCapacityUnits: 10,
-        },
-      })
-      .promise();
+    const createResult = await this.dynamodbAdmin.createTable({
+      TableName: tableName,
+      KeySchema: [{ AttributeName: keyColumn, KeyType: 'HASH' }],
+      AttributeDefinitions: [{ AttributeName: keyColumn, AttributeType: 'S' }],
+      ProvisionedThroughput: {
+        ReadCapacityUnits: 30,
+        WriteCapacityUnits: 10,
+      },
+    });
     logger.stupid(`createResult`, createResult);
     return true;
   };

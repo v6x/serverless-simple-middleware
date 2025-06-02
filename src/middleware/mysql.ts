@@ -127,12 +127,12 @@ export class ConnectionProxy {
   };
 
   private changeDatabase = (dbName: string) =>
-    new Promise((resolve, reject) =>
+    new Promise<void>((resolve, reject) =>
       this.prepareConnection().changeUser(
         {
           database: dbName,
         },
-        err => (err ? reject(err) : resolve()),
+        err => (err ? reject(err) : resolve(undefined)),
       ),
     );
 

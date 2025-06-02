@@ -30,11 +30,11 @@ export class HandlerRequest {
     return this.lazyBody || {};
   }
 
-  get path(): { [key: string]: string } {
+  get path(): { [key: string]: string | undefined } {
     return this.event.pathParameters || {};
   }
 
-  get query(): { [key: string]: string } {
+  get query(): { [key: string]: string | undefined } {
     return this.event.queryStringParameters || {};
   }
 
@@ -116,7 +116,7 @@ export class HandlerResponse {
     const secureStr = specifyCrossOrigin ? 'Secure' : '';
     const pathStr = path !== undefined ? `Path=${path}` : '';
     const cookieStr = [keyValueStr, domainStr, sameSiteStr, secureStr, pathStr]
-      .filter(x => x)
+      .filter((x) => x)
       .join('; ');
     this.cookies.push(cookieStr);
   }
@@ -148,7 +148,8 @@ export interface HandlerPlugin<A extends HandlerAuxBase> {
 }
 
 export class HandlerPluginBase<A extends HandlerAuxBase>
-  implements HandlerPlugin<A> {
+  implements HandlerPlugin<A>
+{
   public create = (): Promise<A> | A => {
     throw new Error('Not yet implemented');
   };
