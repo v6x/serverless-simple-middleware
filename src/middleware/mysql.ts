@@ -54,13 +54,13 @@ export class ConnectionProxy {
     });
 
   public fetch = <T>(sql: string, params?: any[]) =>
-    this.query<T[]>(sql, params).then(res => res || []);
+    this.query<T[]>(sql, params).then((res) => res || []);
 
   public fetchOne = <T>(sql: string, params?: any[], defaultValue?: T) =>
-    this.fetch<T>(sql, params).then(res => {
+    this.fetch<T>(sql, params).then((res) => {
       if (res === undefined || res[0] === undefined) {
         // Makes it as non-null result.
-        return defaultValue || (({} as any) as T);
+        return defaultValue || ({} as any as T);
       }
       return res[0];
     });
@@ -132,13 +132,17 @@ export class ConnectionProxy {
         {
           database: dbName,
         },
-        err => (err ? reject(err) : resolve(undefined)),
+        (err) => (err ? reject(err) : resolve(undefined)),
       ),
     );
 
   private tryToInitializeSchema = async (initial: boolean) => {
-    const { eager = false, ignoreError = false, database = '', tables = {} } =
-      this.pluginConfig.schema || {};
+    const {
+      eager = false,
+      ignoreError = false,
+      database = '',
+      tables = {},
+    } = this.pluginConfig.schema || {};
     if (initial && !eager) {
       return;
     }

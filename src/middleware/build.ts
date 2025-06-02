@@ -26,14 +26,15 @@ class HandlerMiddleware<A extends HandlerAuxBase> {
     return !this.plugins || this.plugins.length === 0
       ? Promise.resolve({} as A) // tslint:disable-line
       : Promise.all(
-          this.plugins.map(plugin => {
+          this.plugins.map((plugin) => {
             const maybePromise = plugin.create();
             return maybePromise instanceof Promise
               ? maybePromise
               : Promise.resolve(maybePromise);
           }),
         ).then(
-          auxes => auxes.reduce((all, each) => ({ ...all, ...each }), {}) as A,
+          (auxes) =>
+            auxes.reduce((all, each) => ({ ...all, ...each }), {}) as A,
         );
   };
 }
@@ -67,13 +68,13 @@ class HandlerProxy<A extends HandlerAuxBase> {
     }
 
     const actualHandler = [this.generateDelegator(handler)];
-    const beginHandlers = middleware.plugins.map(plugin =>
+    const beginHandlers = middleware.plugins.map((plugin) =>
       this.generateDelegator(plugin.begin),
     );
-    const endHandlers = middleware.plugins.map(plugin =>
+    const endHandlers = middleware.plugins.map((plugin) =>
       this.generateDelegator(plugin.end),
     );
-    const errorHandlers = middleware.plugins.map(plugin =>
+    const errorHandlers = middleware.plugins.map((plugin) =>
       this.generateDelegator(plugin.error),
     );
 
@@ -82,14 +83,16 @@ class HandlerProxy<A extends HandlerAuxBase> {
       okResponsible: boolean = false,
     ) =>
       Promise.all(
-        handlers.map(each => this.safeCall(each, okResponsible, errorHandlers)),
+        handlers.map((each) =>
+          this.safeCall(each, okResponsible, errorHandlers),
+        ),
       );
 
     const results = [
       ...(await iterate(beginHandlers)),
       ...(await iterate(actualHandler, true)),
       ...(await iterate(endHandlers)),
-    ].filter(x => x);
+    ].filter((x) => x);
     // In test phase, throws any exception if there was.
     if (process.env.NODE_ENV === 'test') {
       for (const each of results) {
@@ -99,7 +102,7 @@ class HandlerProxy<A extends HandlerAuxBase> {
         }
       }
     }
-    results.forEach(result =>
+    results.forEach((result) =>
       logger.silly(`middleware result : ${JSON.stringify(result)}`),
     );
   };
@@ -118,22 +121,22 @@ class HandlerProxy<A extends HandlerAuxBase> {
     }
   };
 
-  private generateDelegator = (handler: Handler<A>): Delegator => async (
-    okResponsible: boolean,
-  ) => {
-    const maybePromise = handler({
-      request: this.request,
-      response: this.response,
-      aux: this.aux,
-    });
-    const result =
-      maybePromise instanceof Promise ? await maybePromise : maybePromise;
-    logger.stupid(`result`, result);
-    if (!this.response.completed && okResponsible) {
-      this.response.ok(result);
-    }
-    return result;
-  };
+  private generateDelegator =
+    (handler: Handler<A>): Delegator =>
+    async (okResponsible: boolean) => {
+      const maybePromise = handler({
+        request: this.request,
+        response: this.response,
+        aux: this.aux,
+      });
+      const result =
+        maybePromise instanceof Promise ? await maybePromise : maybePromise;
+      logger.stupid(`result`, result);
+      if (!this.response.completed && okResponsible) {
+        this.response.ok(result);
+      }
+      return result;
+    };
 
   private handleError = async (error: Error, errorHandlers?: Delegator[]) => {
     logger.error(error);
@@ -162,12 +165,9 @@ const build = <Aux extends HandlerAuxBase>(
   plugins: Array<HandlerPluginBase<any>>,
 ) => {
   const middleware = new HandlerMiddleware<Aux>(plugins);
-  return (handler: Handler<Aux>) => (
-    event: any,
-    context: any,
-    callback: any,
-  ) => {
-    new HandlerProxy<Aux>(event, context, callback).call(middleware, handler);
-  };
+  return (handler: Handler<Aux>) =>
+    (event: any, context: any, callback: any) => {
+      new HandlerProxy<Aux>(event, context, callback).call(middleware, handler);
+    };
 };
 export default build;
