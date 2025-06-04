@@ -50,30 +50,33 @@ export class HandlerRequest {
   }
 }
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'X-Version',
+  'Access-Control-Allow-Credentials': true,
+};
+
 export class HandlerResponse {
   public callback: any;
   public completed: boolean;
   public result: any | Promise<any> | undefined;
 
-  private corsHeaders: { [header: string]: any };
   private cookies: string[];
   private crossOrigin?: string;
+  private customHeaders: { [header: string]: any };
 
   constructor(callback: any) {
     this.callback = callback;
     this.completed = false;
-    this.corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'X-Version',
-      'Access-Control-Allow-Credentials': true,
-    };
     this.cookies = [];
+    this.customHeaders = {};
   }
 
   public ok(body = {}, code = 200) {
     logger.stupid(`ok`, body);
     const headers = {
-      ...this.corsHeaders,
+      ...CORS_HEADERS,
+      ...this.customHeaders,
     };
     if (this.crossOrigin) {
       headers['Access-Control-Allow-Origin'] = this.crossOrigin;
@@ -96,7 +99,7 @@ export class HandlerResponse {
     logger.stupid(`fail`, body);
     const result = this.callback(null, {
       statusCode: code,
-      headers: this.corsHeaders,
+      headers: CORS_HEADERS,
       body: JSON.stringify(body),
     });
     this.completed = true;
@@ -123,6 +126,10 @@ export class HandlerResponse {
 
   public setCrossOrigin = (origin?: string) => {
     this.crossOrigin = origin;
+  };
+
+  public addHeader = (header: string, value: string) => {
+    this.customHeaders[header] = value;
   };
 }
 
