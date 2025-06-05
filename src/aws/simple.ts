@@ -278,21 +278,13 @@ export class SimpleAWS {
     key: string,
   ): Promise<Buffer> => {
     logger.debug(`Read item[${key}] from bucket[${bucket}]`);
-    const params = {
-      Bucket: bucket,
-      Key: key,
-    };
+    const { Body } = await this.s3.getObject({ Bucket: bucket, Key: key });
 
-    const data = await this.s3.getObject(params);
-    if (data.Body) {
-      const chunks: Buffer[] = [];
-      for await (const chunk of data.Body as NodeJS.ReadableStream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      }
-      return Buffer.concat(chunks);
-    } else {
+    const buffer = await Body?.transformToByteArray();
+    if (!buffer) {
       throw new Error(`Failed to read file ${key} from bucket ${bucket}`);
     }
+    return Buffer.from(buffer);
   };
 
   public upload = async (
