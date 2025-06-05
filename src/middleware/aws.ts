@@ -18,7 +18,7 @@ const initialize = async (aws: SimpleAWS, mapper: InitializerMapper) => {
   const env = process.env;
   const mapping = mapper(aws, env);
   const successes = await Promise.all(
-    Object.keys(mapping).map(name => mapping[name]()),
+    Object.keys(mapping).map((name) => mapping[name]()),
   );
   return Object.keys(mapping).reduce(
     (result, name, index) => ({ ...result, [name]: successes[index] }),

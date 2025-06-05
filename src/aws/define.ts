@@ -1,3 +1,5 @@
+import { ObjectCannedACL } from '@aws-sdk/client-s3';
+
 export enum AWSComponent {
   s3 = 's3',
   sqs = 'sqs',
@@ -13,12 +15,7 @@ export interface S3SignedUrlParams {
   Key?: string;
   Expires?: number;
   ContentType?: string;
-  ACL?:
-    | 'private'
-    | 'public-read'
-    | 'public-read-write'
-    | 'authenticated-read'
-    | string;
+  ACL?: ObjectCannedACL;
   ResponseContentDisposition?: string;
   ResponseContentType?: string;
 }
