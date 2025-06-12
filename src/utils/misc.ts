@@ -1,4 +1,4 @@
-import { AwsError } from '../aws/AwsError';
+import { AwsError } from '../internal/AwsError';
 
 export const stringifyError = (
   err: any,

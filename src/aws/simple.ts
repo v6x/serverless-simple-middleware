@@ -7,17 +7,22 @@ import { nanoid } from 'nanoid/non-secure';
 import { getLogger, stringifyError } from '../utils';
 import { SimpleAWSConfig } from './config';
 
-import {
-  AWSComponent,
-  S3SignedUrlParams,
-  S3SignedUrlResult,
-  SQSMessageBody,
-} from './define';
+import { AWSComponent, SQSMessageBody } from './define';
 import { DynamoDB, DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { GetObjectCommand, PutObjectCommand, S3 } from '@aws-sdk/client-s3';
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3,
+  UploadPartCommand,
+  UploadPartCopyCommand,
+} from '@aws-sdk/client-s3';
 import { SQS } from '@aws-sdk/client-sqs';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { PresignerOptions } from '../internal/s3';
 
 const logger = getLogger(__filename);
 
@@ -343,33 +348,67 @@ export class SimpleAWS {
     }
   };
 
-  public getSignedUrl = async (
-    bucketName: string,
-    key: string,
-    operation: 'getObject' | 'putObject' = 'getObject',
-    params?: S3SignedUrlParams,
-  ): Promise<S3SignedUrlResult> => {
-    const { Expires, ...filteredParams } = params || {};
-    const command =
-      operation === 'putObject'
-        ? new PutObjectCommand({
-            Bucket: bucketName,
-            Key: key,
-            ...filteredParams,
-          })
-        : new GetObjectCommand({
-            Bucket: bucketName,
-            Key: key,
-            ...filteredParams,
-          });
-
-    return {
-      key,
-      url: await getSignedUrl(this.s3, command, {
-        expiresIn: Expires || 60 * 10,
-      }),
-    };
-  };
+  public async getSignedUrl(options: PresignerOptions): Promise<string> {
+    const { expiresIn = 600 } = options;
+    switch (options.operation) {
+      case 'putObject': {
+        const cmd = new PutObjectCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'getObject': {
+        const cmd = new GetObjectCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'deleteObject': {
+        const cmd = new DeleteObjectCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'headObject': {
+        const cmd = new HeadObjectCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'copyObject': {
+        const cmd = new CopyObjectCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'uploadPart': {
+        const cmd = new UploadPartCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'uploadPartCopy': {
+        const cmd = new UploadPartCopyCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+    }
+  }
 
   public getSignedCookie = (
     keyPairId: string,
@@ -382,18 +421,6 @@ export class SimpleAWS {
       keyPairId,
       privateKey,
       dateLessThan: new Date(expires * 1000),
-    });
-  };
-
-  public getAttachmentUrl = async (
-    bucketName: string,
-    key: string,
-    fileName: string,
-    params?: S3SignedUrlParams,
-  ): Promise<S3SignedUrlResult> => {
-    return await this.getSignedUrl(bucketName, key, 'getObject', {
-      ...params,
-      ResponseContentDisposition: `attachment; filename="${fileName}"`,
     });
   };
 
