@@ -1,4 +1,3 @@
-import * as AWS from 'aws-sdk'; // tslint:disable-line
 import { v4 as uuid4 } from 'uuid';
 import {
   AWSComponent,
@@ -10,6 +9,7 @@ import { getLogger, stringifyError } from '../utils';
 
 import { $enum } from 'ts-enum-util';
 import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
+import { SQS } from '@aws-sdk/client-sqs';
 
 const logger = getLogger(__filename);
 
@@ -61,10 +61,10 @@ export class TracerLog implements ITracerLog {
 
 export class Tracer {
   private queueName: string;
-  private sqs: AWS.SQS;
+  private sqs: SQS;
   private buffer: TracerLog[];
 
-  constructor(queueName: string, sqs: AWS.SQS) {
+  constructor(queueName: string, sqs: SQS) {
     this.queueName = queueName;
     this.sqs = sqs;
     this.buffer = [];
@@ -77,11 +77,9 @@ export class Tracer {
       return;
     }
     try {
-      const urlResult = await this.sqs
-        .getQueueUrl({
-          QueueName: this.queueName,
-        })
-        .promise();
+      const urlResult = await this.sqs.getQueueUrl({
+        QueueName: this.queueName,
+      });
       logger.stupid(`urlResult`, urlResult);
       if (!urlResult.QueueUrl) {
         throw new Error(`No queue url with name[${this.queueName}]`);
@@ -92,15 +90,13 @@ export class Tracer {
       for (let begin = 0; begin < this.buffer.length; begin += chunkSize) {
         const end = Math.min(this.buffer.length, begin + chunkSize);
         const subset = this.buffer.slice(begin, end);
-        const sendBatchResult = await this.sqs
-          .sendMessageBatch({
-            QueueUrl: eventQueueUrl,
-            Entries: subset.map(each => ({
-              Id: `${each.key}_${each.uuid}`,
-              MessageBody: JSON.stringify(each),
-            })),
-          })
-          .promise();
+        const sendBatchResult = await this.sqs.sendMessageBatch({
+          QueueUrl: eventQueueUrl,
+          Entries: subset.map((each) => ({
+            Id: `${each.key}_${each.uuid}`,
+            MessageBody: JSON.stringify(each),
+          })),
+        });
         logger.stupid(`sendBatchResult`, sendBatchResult);
       }
 
@@ -194,11 +190,11 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
 
     const sqs = (() => {
       if (!awsConfig) {
-        return new AWS.SQS({
+        return new SQS({
           region: this.options.region,
         });
       }
-      $enum(AWSComponent).forEach(eachComponent => {
+      $enum(AWSComponent).forEach((eachComponent) => {
         const config = awsConfig.get(eachComponent);
         if (config) {
           config.region = this.options.region;
