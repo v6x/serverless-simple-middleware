@@ -444,11 +444,20 @@ var SimpleAWS = /** @class */ (function () {
             });
         }); };
         this.getSignedCookie = function (keyPairId, privateKey, url, expires) {
+            var policy = JSON.stringify({
+                Statement: [
+                    {
+                        Resource: url,
+                        Condition: {
+                            DateLessThan: { 'AWS:EpochTime': expires },
+                        },
+                    },
+                ],
+            });
             return (0, cloudfront_signer_1.getSignedCookies)({
-                url: url,
                 keyPairId: keyPairId,
                 privateKey: privateKey,
-                dateLessThan: new Date(expires * 1000),
+                policy: policy,
             });
         };
         this.getDynamoDbItem = function (tableName, key, defaultValue) { return __awaiter(_this, void 0, void 0, function () {

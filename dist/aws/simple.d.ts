@@ -1,3 +1,4 @@
+import { CloudfrontSignedCookiesOutput } from '@aws-sdk/cloudfront-signer';
 import { SimpleAWSConfig } from './config';
 import { SQSMessageBody } from './define';
 import { DynamoDB } from '@aws-sdk/client-dynamodb';
@@ -31,7 +32,7 @@ export declare class SimpleAWS {
     uploadFromBuffer: (bucket: string, key: string, buffer: Buffer) => Promise<string>;
     writeFile: (bucket: string, key: string, content: string) => Promise<void>;
     getSignedUrl(options: PresignerOptions): Promise<string>;
-    getSignedCookie: (keyPairId: string, privateKey: string, url: string, expires: number) => import("@aws-sdk/cloudfront-signer").CloudfrontSignedCookiesOutput;
+    getSignedCookie: (keyPairId: string, privateKey: string, url: string, expires: number) => CloudfrontSignedCookiesOutput;
     getDynamoDbItem: <T>(tableName: string, key: {
         [keyColumn: string]: string;
     }, defaultValue?: T) => Promise<T | undefined>;
