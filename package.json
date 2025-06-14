@@ -10,6 +10,9 @@
     "type": "git",
     "url": "git+ssh://git@github.com/v6x/serverless-simple-middleware.git"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "keywords": [
     "serverless"
   ],
@@ -32,6 +35,7 @@
     "@aws-sdk/client-sqs": "^3.817.0",
     "@aws-sdk/cloudfront-signer": "^3.813.0",
     "@aws-sdk/lib-dynamodb": "^3.817.0",
+    "@aws-sdk/lib-storage": "^3.828.0",
     "@aws-sdk/s3-request-presigner": "^3.817.0",
     "@types/aws-lambda": "8",
     "@types/mysql": "^2.15.5",

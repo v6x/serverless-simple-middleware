@@ -26,6 +26,7 @@ import { SQS } from '@aws-sdk/client-sqs';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PresignerOptions } from '../internal/s3';
+import { Upload } from '@aws-sdk/lib-storage';
 
 const logger = getLogger(__filename);
 
@@ -65,6 +66,12 @@ export class SimpleAWS {
     if (this.lazyDynamodb === undefined) {
       this.lazyDynamodb = DynamoDBDocument.from(
         new DynamoDBClient(this.config.get(AWSComponent.dynamodb) || {}),
+        {
+          marshallOptions: {
+            convertEmptyValues: true,
+            removeUndefinedValues: true,
+          },
+        },
       );
     }
     return this.lazyDynamodb;
@@ -181,29 +188,18 @@ export class SimpleAWS {
     queueName: string,
     handle: string,
     seconds: number,
-  ): Promise<string> =>
-    new Promise<string>(async (resolve, reject) => {
-      logger.debug(`Change visibilityTimeout of ${handle} to ${seconds}secs.`);
-      this.getQueueUrl(queueName)
-        .then((queueUrl) => {
-          this.sqs.changeMessageVisibility(
-            {
-              QueueUrl: queueUrl,
-              ReceiptHandle: handle,
-              VisibilityTimeout: seconds,
-            },
-            (err, changeResult) => {
-              if (err) {
-                reject(err);
-              } else {
-                logger.stupid(`changeResult`, changeResult);
-                resolve(handle);
-              }
-            },
-          );
-        })
-        .catch(reject);
+  ): Promise<string> => {
+    logger.debug(`Change visibilityTimeout of ${handle} to ${seconds}secs.`);
+    const queueUrl = await this.getQueueUrl(queueName);
+
+    await this.sqs.changeMessageVisibility({
+      QueueUrl: queueUrl,
+      ReceiptHandle: handle,
+      VisibilityTimeout: seconds,
     });
+
+    return handle;
+  };
 
   public completeMessage = async (
     queueName: string,
@@ -250,6 +246,7 @@ export class SimpleAWS {
   ): Promise<string> => {
     logger.debug(`Get a stream of item[${key}] from bucket[${bucket}]`);
     const { Body } = await this.s3.getObject({ Bucket: bucket, Key: key });
+
     return new Promise<string>((resolve, reject) =>
       (Body as NodeJS.ReadableStream)
         .on('error', (error) => reject(error))
@@ -301,12 +298,18 @@ export class SimpleAWS {
     key: string,
   ): Promise<string> => {
     logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
-    const putResult = await this.s3.putObject({
-      Bucket: bucket,
-      Key: key,
-      Body: fs.createReadStream(localPath),
+    const upload = new Upload({
+      client: this.s3,
+      params: {
+        Bucket: bucket,
+        Key: key,
+        Body: fs.createReadStream(localPath),
+      },
+      partSize: 5 * 1024 * 1024, // 5MB
+      queueSize: 4,
     });
-    logger.stupid(`putResult`, putResult);
+
+    await upload.done();
     return key;
   };
 
@@ -316,12 +319,17 @@ export class SimpleAWS {
     buffer: Buffer,
   ): Promise<string> => {
     logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
-    const putResult = await this.s3.putObject({
-      Bucket: bucket,
-      Key: key,
-      Body: buffer,
+    const upload = new Upload({
+      client: this.s3,
+      params: {
+        Bucket: bucket,
+        Key: key,
+        Body: buffer,
+      },
+      partSize: 5 * 1024 * 1024, // 5MB
+      queueSize: 4,
     });
-    logger.stupid(`putResult`, putResult);
+    await upload.done();
     return key;
   };
 
@@ -339,15 +347,14 @@ export class SimpleAWS {
       if (!fs.existsSync(tempFile)) {
         return;
       }
-      fs.unlink(tempFile, (error) => {
-        if (!error) {
-          return;
-        }
+      try {
+        await fs.promises.unlink(tempFile);
+      } catch (error) {
         const msg = `Error during writeFile: unlink file ${tempFile}: ${stringifyError(
           error,
         )}`;
         logger.error(msg);
-      });
+      }
     }
   };
 
