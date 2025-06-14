@@ -69,6 +69,7 @@ var client_s3_1 = require("@aws-sdk/client-s3");
 var client_sqs_1 = require("@aws-sdk/client-sqs");
 var lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
 var s3_request_presigner_1 = require("@aws-sdk/s3-request-presigner");
+var lib_storage_1 = require("@aws-sdk/lib-storage");
 var logger = (0, utils_1.getLogger)(__filename);
 var SimpleAWS = /** @class */ (function () {
     function SimpleAWS(config) {
@@ -213,32 +214,23 @@ var SimpleAWS = /** @class */ (function () {
             });
         };
         this.retainMessage = function (queueName, handle, seconds) { return __awaiter(_this, void 0, void 0, function () {
-            var _this = this;
+            var queueUrl;
             return __generator(this, function (_a) {
-                return [2 /*return*/, new Promise(function (resolve, reject) { return __awaiter(_this, void 0, void 0, function () {
-                        var _this = this;
-                        return __generator(this, function (_a) {
-                            logger.debug("Change visibilityTimeout of ".concat(handle, " to ").concat(seconds, "secs."));
-                            this.getQueueUrl(queueName)
-                                .then(function (queueUrl) {
-                                _this.sqs.changeMessageVisibility({
-                                    QueueUrl: queueUrl,
-                                    ReceiptHandle: handle,
-                                    VisibilityTimeout: seconds,
-                                }, function (err, changeResult) {
-                                    if (err) {
-                                        reject(err);
-                                    }
-                                    else {
-                                        logger.stupid("changeResult", changeResult);
-                                        resolve(handle);
-                                    }
-                                });
-                            })
-                                .catch(reject);
-                            return [2 /*return*/];
-                        });
-                    }); })];
+                switch (_a.label) {
+                    case 0:
+                        logger.debug("Change visibilityTimeout of ".concat(handle, " to ").concat(seconds, "secs."));
+                        return [4 /*yield*/, this.getQueueUrl(queueName)];
+                    case 1:
+                        queueUrl = _a.sent();
+                        return [4 /*yield*/, this.sqs.changeMessageVisibility({
+                                QueueUrl: queueUrl,
+                                ReceiptHandle: handle,
+                                VisibilityTimeout: seconds,
+                            })];
+                    case 2:
+                        _a.sent();
+                        return [2 /*return*/, handle];
+                }
             });
         }); };
         this.completeMessage = function (queueName, handle) { return __awaiter(_this, void 0, void 0, function () {
@@ -375,43 +367,53 @@ var SimpleAWS = /** @class */ (function () {
             });
         }); };
         this.upload = function (bucket, localPath, key) { return __awaiter(_this, void 0, void 0, function () {
-            var putResult;
+            var upload;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         logger.debug("Upload item[".concat(key, "] into bucket[").concat(bucket, "]"));
-                        return [4 /*yield*/, this.s3.putObject({
+                        upload = new lib_storage_1.Upload({
+                            client: this.s3,
+                            params: {
                                 Bucket: bucket,
                                 Key: key,
                                 Body: fs.createReadStream(localPath),
-                            })];
+                            },
+                            partSize: 5 * 1024 * 1024, // 5MB
+                            queueSize: 4,
+                        });
+                        return [4 /*yield*/, upload.done()];
                     case 1:
-                        putResult = _a.sent();
-                        logger.stupid("putResult", putResult);
+                        _a.sent();
                         return [2 /*return*/, key];
                 }
             });
         }); };
         this.uploadFromBuffer = function (bucket, key, buffer) { return __awaiter(_this, void 0, void 0, function () {
-            var putResult;
+            var upload;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         logger.debug("Upload item[".concat(key, "] into bucket[").concat(bucket, "]"));
-                        return [4 /*yield*/, this.s3.putObject({
+                        upload = new lib_storage_1.Upload({
+                            client: this.s3,
+                            params: {
                                 Bucket: bucket,
                                 Key: key,
                                 Body: buffer,
-                            })];
+                            },
+                            partSize: 5 * 1024 * 1024, // 5MB
+                            queueSize: 4,
+                        });
+                        return [4 /*yield*/, upload.done()];
                     case 1:
-                        putResult = _a.sent();
-                        logger.stupid("putResult", putResult);
+                        _a.sent();
                         return [2 /*return*/, key];
                 }
             });
         }); };
         this.writeFile = function (bucket, key, content) { return __awaiter(_this, void 0, void 0, function () {
-            var tempFile;
+            var tempFile, error_2, msg;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -419,27 +421,32 @@ var SimpleAWS = /** @class */ (function () {
                         tempFile = "".concat(os.tmpdir(), "/").concat((0, non_secure_1.nanoid)());
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, , 4, 5]);
+                        _a.trys.push([1, , 4, 9]);
                         return [4 /*yield*/, fs.promises.writeFile(tempFile, content, 'utf-8')];
                     case 2:
                         _a.sent();
                         return [4 /*yield*/, this.upload(bucket, tempFile, key)];
                     case 3:
                         _a.sent();
-                        return [3 /*break*/, 5];
+                        return [3 /*break*/, 9];
                     case 4:
                         if (!fs.existsSync(tempFile)) {
                             return [2 /*return*/];
                         }
-                        fs.unlink(tempFile, function (error) {
-                            if (!error) {
-                                return;
-                            }
-                            var msg = "Error during writeFile: unlink file ".concat(tempFile, ": ").concat((0, utils_1.stringifyError)(error));
-                            logger.error(msg);
-                        });
-                        return [7 /*endfinally*/];
-                    case 5: return [2 /*return*/];
+                        _a.label = 5;
+                    case 5:
+                        _a.trys.push([5, 7, , 8]);
+                        return [4 /*yield*/, fs.promises.unlink(tempFile)];
+                    case 6:
+                        _a.sent();
+                        return [3 /*break*/, 8];
+                    case 7:
+                        error_2 = _a.sent();
+                        msg = "Error during writeFile: unlink file ".concat(tempFile, ": ").concat((0, utils_1.stringifyError)(error_2));
+                        logger.error(msg);
+                        return [3 /*break*/, 8];
+                    case 8: return [7 /*endfinally*/];
+                    case 9: return [2 /*return*/];
                 }
             });
         }); };
@@ -514,7 +521,7 @@ var SimpleAWS = /** @class */ (function () {
         }); };
         // Setup
         this.setupQueue = function (queueName) { return __awaiter(_this, void 0, void 0, function () {
-            var listResult, _i, _a, queueUrl, error_2, createResult;
+            var listResult, _i, _a, queueUrl, error_3, createResult;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -535,8 +542,8 @@ var SimpleAWS = /** @class */ (function () {
                         }
                         return [3 /*break*/, 3];
                     case 2:
-                        error_2 = _b.sent();
-                        logger.debug("No Queue[".concat(queueName, "] exists due to ").concat(error_2));
+                        error_3 = _b.sent();
+                        logger.debug("No Queue[".concat(queueName, "] exists due to ").concat(error_3));
                         return [3 /*break*/, 3];
                     case 3:
                         logger.debug("Create a queue[".concat(queueName, "] newly."));
@@ -551,7 +558,7 @@ var SimpleAWS = /** @class */ (function () {
             });
         }); };
         this.setupStorage = function (bucketName, cors) { return __awaiter(_this, void 0, void 0, function () {
-            var listResult, error_3, createResult, corsResult;
+            var listResult, error_4, createResult, corsResult;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -566,8 +573,8 @@ var SimpleAWS = /** @class */ (function () {
                         }
                         return [3 /*break*/, 3];
                     case 2:
-                        error_3 = _a.sent();
-                        logger.debug("No bucket[".concat(bucketName, "] exists due to ").concat(error_3));
+                        error_4 = _a.sent();
+                        logger.debug("No bucket[".concat(bucketName, "] exists due to ").concat(error_4));
                         return [3 /*break*/, 3];
                     case 3:
                         logger.debug("Create a bucket[".concat(bucketName, "] newly."));
@@ -599,7 +606,7 @@ var SimpleAWS = /** @class */ (function () {
             });
         }); };
         this.setupDynamoDb = function (tableName, keyColumn) { return __awaiter(_this, void 0, void 0, function () {
-            var listResult, error_4, createResult;
+            var listResult, error_5, createResult;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -613,8 +620,8 @@ var SimpleAWS = /** @class */ (function () {
                         }
                         return [3 /*break*/, 3];
                     case 2:
-                        error_4 = _a.sent();
-                        logger.debug("No table[".concat(tableName, "] exists due to ").concat(error_4));
+                        error_5 = _a.sent();
+                        logger.debug("No table[".concat(tableName, "] exists due to ").concat(error_5));
                         return [3 /*break*/, 3];
                     case 3:
                         logger.debug("Create a table[".concat(tableName, "] newly."));
@@ -665,7 +672,12 @@ var SimpleAWS = /** @class */ (function () {
     Object.defineProperty(SimpleAWS.prototype, "dynamodb", {
         get: function () {
             if (this.lazyDynamodb === undefined) {
-                this.lazyDynamodb = lib_dynamodb_1.DynamoDBDocument.from(new client_dynamodb_1.DynamoDBClient(this.config.get(define_1.AWSComponent.dynamodb) || {}));
+                this.lazyDynamodb = lib_dynamodb_1.DynamoDBDocument.from(new client_dynamodb_1.DynamoDBClient(this.config.get(define_1.AWSComponent.dynamodb) || {}), {
+                    marshallOptions: {
+                        convertEmptyValues: true,
+                        removeUndefinedValues: true,
+                    },
+                });
             }
             return this.lazyDynamodb;
         },
