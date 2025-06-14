@@ -1,4 +1,7 @@
-import { getSignedCookies } from '@aws-sdk/cloudfront-signer';
+import {
+  CloudfrontSignedCookiesOutput,
+  getSignedCookies,
+} from '@aws-sdk/cloudfront-signer';
 
 import * as fs from 'fs';
 import * as os from 'os';
@@ -415,12 +418,22 @@ export class SimpleAWS {
     privateKey: string,
     url: string,
     expires: number,
-  ) => {
+  ): CloudfrontSignedCookiesOutput => {
+    const policy = JSON.stringify({
+      Statement: [
+        {
+          Resource: url,
+          Condition: {
+            DateLessThan: { 'AWS:EpochTime': expires },
+          },
+        },
+      ],
+    });
+
     return getSignedCookies({
-      url,
       keyPairId,
       privateKey,
-      dateLessThan: new Date(expires * 1000),
+      policy,
     });
   };
 
