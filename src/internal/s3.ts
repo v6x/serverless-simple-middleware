@@ -6,6 +6,11 @@ import {
   CopyObjectCommandInput,
   UploadPartCommandInput,
   UploadPartCopyCommandInput,
+  AbortMultipartUploadCommandInput,
+  CompleteMultipartUploadCommandInput,
+  CreateMultipartUploadCommandInput,
+  ListObjectsV2CommandInput,
+  ListPartsCommandInput,
 } from '@aws-sdk/client-s3/dist-types/commands';
 
 export type S3Operation =
@@ -15,7 +20,12 @@ export type S3Operation =
   | 'headObject'
   | 'copyObject'
   | 'uploadPart'
-  | 'uploadPartCopy';
+  | 'uploadPartCopy'
+  | 'listObjectsV2'
+  | 'createMultipartUpload'
+  | 'completeMultipartUpload'
+  | 'abortMultipartUpload'
+  | 'listParts';
 
 export type CommandInputMap = {
   putObject: PutObjectCommandInput;
@@ -25,9 +35,21 @@ export type CommandInputMap = {
   copyObject: CopyObjectCommandInput;
   uploadPart: UploadPartCommandInput;
   uploadPartCopy: UploadPartCopyCommandInput;
+  listObjectsV2: ListObjectsV2CommandInput;
+  createMultipartUpload: CreateMultipartUploadCommandInput;
+  completeMultipartUpload: CompleteMultipartUploadCommandInput;
+  abortMultipartUpload: AbortMultipartUploadCommandInput;
+  listParts: ListPartsCommandInput;
 };
 
-type OpsWithRequiredParams = 'copyObject' | 'uploadPart' | 'uploadPartCopy';
+type OpsWithRequiredParams =
+  | 'copyObject'
+  | 'uploadPart'
+  | 'uploadPartCopy'
+  | 'createMultipartUpload'
+  | 'completeMultipartUpload'
+  | 'abortMultipartUpload'
+  | 'listParts';
 type OpsWithOptionalParams = Exclude<S3Operation, OpsWithRequiredParams>;
 
 export type PresignerOptions =
