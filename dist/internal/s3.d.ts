@@ -1,5 +1,5 @@
-import { DeleteObjectCommandInput, GetObjectCommandInput, PutObjectCommandInput, HeadObjectCommandInput, CopyObjectCommandInput, UploadPartCommandInput, UploadPartCopyCommandInput } from '@aws-sdk/client-s3/dist-types/commands';
-export type S3Operation = 'putObject' | 'getObject' | 'deleteObject' | 'headObject' | 'copyObject' | 'uploadPart' | 'uploadPartCopy';
+import { DeleteObjectCommandInput, GetObjectCommandInput, PutObjectCommandInput, HeadObjectCommandInput, CopyObjectCommandInput, UploadPartCommandInput, UploadPartCopyCommandInput, AbortMultipartUploadCommandInput, CompleteMultipartUploadCommandInput, CreateMultipartUploadCommandInput, ListObjectsV2CommandInput, ListPartsCommandInput } from '@aws-sdk/client-s3/dist-types/commands';
+export type S3Operation = 'putObject' | 'getObject' | 'deleteObject' | 'headObject' | 'copyObject' | 'uploadPart' | 'uploadPartCopy' | 'listObjectsV2' | 'createMultipartUpload' | 'completeMultipartUpload' | 'abortMultipartUpload' | 'listParts';
 export type CommandInputMap = {
     putObject: PutObjectCommandInput;
     getObject: GetObjectCommandInput;
@@ -8,8 +8,13 @@ export type CommandInputMap = {
     copyObject: CopyObjectCommandInput;
     uploadPart: UploadPartCommandInput;
     uploadPartCopy: UploadPartCopyCommandInput;
+    listObjectsV2: ListObjectsV2CommandInput;
+    createMultipartUpload: CreateMultipartUploadCommandInput;
+    completeMultipartUpload: CompleteMultipartUploadCommandInput;
+    abortMultipartUpload: AbortMultipartUploadCommandInput;
+    listParts: ListPartsCommandInput;
 };
-type OpsWithRequiredParams = 'copyObject' | 'uploadPart' | 'uploadPartCopy';
+type OpsWithRequiredParams = 'copyObject' | 'uploadPart' | 'uploadPartCopy' | 'createMultipartUpload' | 'completeMultipartUpload' | 'abortMultipartUpload' | 'listParts';
 type OpsWithOptionalParams = Exclude<S3Operation, OpsWithRequiredParams>;
 export type PresignerOptions = {
     [K in OpsWithOptionalParams]: {

@@ -696,7 +696,7 @@ var SimpleAWS = /** @class */ (function () {
     });
     SimpleAWS.prototype.getSignedUrl = function (options) {
         return __awaiter(this, void 0, void 0, function () {
-            var _a, expiresIn, cmd, cmd, cmd, cmd, cmd, cmd, cmd;
+            var _a, expiresIn, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd;
             return __generator(this, function (_b) {
                 _a = options.expiresIn, expiresIn = _a === void 0 ? 600 : _a;
                 switch (options.operation) {
@@ -726,6 +726,26 @@ var SimpleAWS = /** @class */ (function () {
                     }
                     case 'uploadPartCopy': {
                         cmd = new client_s3_1.UploadPartCopyCommand(__assign({ Bucket: options.bucket, Key: options.key }, options.params));
+                        return [2 /*return*/, (0, s3_request_presigner_1.getSignedUrl)(this.s3, cmd, { expiresIn: expiresIn })];
+                    }
+                    case 'listObjectsV2': {
+                        cmd = new client_s3_1.ListObjectsV2Command(__assign({ Bucket: options.bucket }, options.params));
+                        return [2 /*return*/, (0, s3_request_presigner_1.getSignedUrl)(this.s3, cmd, { expiresIn: expiresIn })];
+                    }
+                    case 'createMultipartUpload': {
+                        cmd = new client_s3_1.CreateMultipartUploadCommand(__assign({ Bucket: options.bucket, Key: options.key }, options.params));
+                        return [2 /*return*/, (0, s3_request_presigner_1.getSignedUrl)(this.s3, cmd, { expiresIn: expiresIn })];
+                    }
+                    case 'completeMultipartUpload': {
+                        cmd = new client_s3_1.CompleteMultipartUploadCommand(__assign({ Bucket: options.bucket, Key: options.key }, options.params));
+                        return [2 /*return*/, (0, s3_request_presigner_1.getSignedUrl)(this.s3, cmd, { expiresIn: expiresIn })];
+                    }
+                    case 'abortMultipartUpload': {
+                        cmd = new client_s3_1.AbortMultipartUploadCommand(__assign({ Bucket: options.bucket, Key: options.key }, options.params));
+                        return [2 /*return*/, (0, s3_request_presigner_1.getSignedUrl)(this.s3, cmd, { expiresIn: expiresIn })];
+                    }
+                    case 'listParts': {
+                        cmd = new client_s3_1.ListPartsCommand(__assign({ Bucket: options.bucket, Key: options.key }, options.params));
                         return [2 /*return*/, (0, s3_request_presigner_1.getSignedUrl)(this.s3, cmd, { expiresIn: expiresIn })];
                     }
                 }
