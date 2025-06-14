@@ -364,7 +364,7 @@ export class SimpleAWS {
   };
 
   public async getSignedUrl(options: PresignerOptions): Promise<string> {
-    const { expiresIn = 600 } = options;
+    const { expiresIn = 600, unhoistableHeaders } = options;
     switch (options.operation) {
       case 'putObject': {
         const cmd = new PutObjectCommand({
@@ -372,7 +372,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'getObject': {
         const cmd = new GetObjectCommand({
@@ -380,7 +383,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'deleteObject': {
         const cmd = new DeleteObjectCommand({
@@ -388,7 +394,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'headObject': {
         const cmd = new HeadObjectCommand({
@@ -396,7 +405,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'copyObject': {
         const cmd = new CopyObjectCommand({
@@ -404,7 +416,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'uploadPart': {
         const cmd = new UploadPartCommand({
@@ -412,7 +427,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'uploadPartCopy': {
         const cmd = new UploadPartCopyCommand({
@@ -420,14 +438,20 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'listObjectsV2': {
         const cmd = new ListObjectsV2Command({
           Bucket: options.bucket,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'createMultipartUpload': {
         const cmd = new CreateMultipartUploadCommand({
@@ -435,7 +459,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'completeMultipartUpload': {
         const cmd = new CompleteMultipartUploadCommand({
@@ -443,7 +470,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'abortMultipartUpload': {
         const cmd = new AbortMultipartUploadCommand({
@@ -451,7 +481,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
       case 'listParts': {
         const cmd = new ListPartsCommand({
@@ -459,7 +492,10 @@ export class SimpleAWS {
           Key: options.key,
           ...options.params,
         });
-        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+        return getSignedUrl(this.s3, cmd, {
+          expiresIn: expiresIn,
+          unhoistableHeaders,
+        });
       }
     }
   }

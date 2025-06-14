@@ -60,6 +60,7 @@ export type PresignerOptions =
         key: string;
         params?: Omit<CommandInputMap[K], 'Bucket' | 'Key'>;
         expiresIn?: number;
+        unhoistableHeaders?: Set<string>;
       };
     }[OpsWithOptionalParams]
   | {
@@ -69,5 +70,6 @@ export type PresignerOptions =
         key: string;
         params: Omit<CommandInputMap[K], 'Bucket' | 'Key'>;
         expiresIn?: number;
+        unhoistableHeaders?: Set<string>;
       };
     }[OpsWithRequiredParams];
