@@ -13,10 +13,15 @@ import { SimpleAWSConfig } from './config';
 import { AWSComponent, SQSMessageBody } from './define';
 import { DynamoDB, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
+  ListPartsCommand,
   PutObjectCommand,
   S3,
   UploadPartCommand,
@@ -411,6 +416,45 @@ export class SimpleAWS {
       }
       case 'uploadPartCopy': {
         const cmd = new UploadPartCopyCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'listObjectsV2': {
+        const cmd = new ListObjectsV2Command({
+          Bucket: options.bucket,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'createMultipartUpload': {
+        const cmd = new CreateMultipartUploadCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'completeMultipartUpload': {
+        const cmd = new CompleteMultipartUploadCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'abortMultipartUpload': {
+        const cmd = new AbortMultipartUploadCommand({
+          Bucket: options.bucket,
+          Key: options.key,
+          ...options.params,
+        });
+        return getSignedUrl(this.s3, cmd, { expiresIn: expiresIn });
+      }
+      case 'listParts': {
+        const cmd = new ListPartsCommand({
           Bucket: options.bucket,
           Key: options.key,
           ...options.params,
