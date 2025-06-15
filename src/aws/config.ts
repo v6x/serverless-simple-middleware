@@ -33,7 +33,7 @@ export const loadAWSConfig = (
   if (typeof newConfigsOrUrl === 'string') {
     if (/^http.*json$/.test(newConfigsOrUrl)) {
       return fetch(newConfigsOrUrl)
-        .then(r => r.json())
+        .then((r) => r.json())
         .then(loadAWSConfig);
     } else if (/json$/.test(newConfigsOrUrl)) {
       return loadAWSConfig(
