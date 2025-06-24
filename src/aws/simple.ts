@@ -3,6 +3,8 @@ import {
   getSignedCookies,
 } from '@aws-sdk/cloudfront-signer';
 
+import { envDefault as currentStage } from 'simple-staging';
+
 import * as fs from 'fs';
 import * as os from 'os';
 import { nanoid } from 'nanoid/non-secure';
@@ -312,6 +314,7 @@ export class SimpleAWS {
       },
       partSize: 5 * 1024 * 1024, // 5MB
       queueSize: 4,
+      tags: [{ Key: 'STAGE', Value: currentStage.level }],
     });
 
     await upload.done();
@@ -333,6 +336,7 @@ export class SimpleAWS {
       },
       partSize: 5 * 1024 * 1024, // 5MB
       queueSize: 4,
+      tags: [{ Key: 'STAGE', Value: currentStage.level }],
     });
     await upload.done();
     return key;
