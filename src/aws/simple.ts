@@ -26,6 +26,7 @@ import {
   ListPartsCommand,
   PutObjectCommand,
   S3,
+  Tag,
   UploadPartCommand,
   UploadPartCopyCommand,
 } from '@aws-sdk/client-s3';
@@ -44,6 +45,10 @@ export class SimpleAWS {
   private lazySqs: SQS | undefined;
   private lazyDynamodb: DynamoDBDocument | undefined;
   private lazyDynamodbAdmin: DynamoDB | undefined;
+  private static readonly structuredStageTag: Tag[] = [
+    { Key: 'STAGE', Value: currentStage.level },
+  ];
+  private static readonly stageTagging: string = `STAGE=${currentStage.level}`;
 
   constructor(config?: SimpleAWSConfig) {
     this.config = config || new SimpleAWSConfig();
@@ -314,7 +319,7 @@ export class SimpleAWS {
       },
       partSize: 5 * 1024 * 1024, // 5MB
       queueSize: 4,
-      tags: [{ Key: 'STAGE', Value: currentStage.level }],
+      tags: SimpleAWS.structuredStageTag,
     });
 
     await upload.done();
@@ -336,7 +341,7 @@ export class SimpleAWS {
       },
       partSize: 5 * 1024 * 1024, // 5MB
       queueSize: 4,
-      tags: [{ Key: 'STAGE', Value: currentStage.level }],
+      tags: SimpleAWS.structuredStageTag,
     });
     await upload.done();
     return key;
@@ -375,6 +380,7 @@ export class SimpleAWS {
           Bucket: options.bucket,
           Key: options.key,
           ...options.params,
+          Tagging: SimpleAWS.stageTagging,
         });
         return getSignedUrl(this.s3, cmd, {
           expiresIn: expiresIn,
@@ -462,6 +468,7 @@ export class SimpleAWS {
           Bucket: options.bucket,
           Key: options.key,
           ...options.params,
+          Tagging: SimpleAWS.stageTagging,
         });
         return getSignedUrl(this.s3, cmd, {
           expiresIn: expiresIn,
