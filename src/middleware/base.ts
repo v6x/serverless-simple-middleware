@@ -110,16 +110,30 @@ export class HandlerResponse {
     key: string,
     value: string,
     domain?: string,
-    specifyCrossOrigin?: true,
+    sameSite?: 'None' | 'Lax' | 'Strict',
+    secure?: boolean,
     path?: string,
+    httpOnly?: boolean,
+    maxAgeSeconds?: number,
   ) {
     const keyValueStr = `${key}=${value}`;
     const domainStr = domain ? `Domain=${domain}` : '';
-    const sameSiteStr = specifyCrossOrigin ? 'SameSite=None' : '';
-    const secureStr = specifyCrossOrigin ? 'Secure' : '';
+    const sameSiteStr = sameSite ? `SameSite=${sameSite}` : '';
+    const secureStr = secure ? 'Secure' : '';
     const pathStr = path !== undefined ? `Path=${path}` : '';
-    const cookieStr = [keyValueStr, domainStr, sameSiteStr, secureStr, pathStr]
-      .filter((x) => x)
+    const httpOnlyStr = httpOnly ? 'HttpOnly' : '';
+    const maxAgeStr =
+      maxAgeSeconds || maxAgeSeconds === 0 ? `Max-Age=${maxAgeSeconds}` : '';
+    const cookieStr = [
+      keyValueStr,
+      domainStr,
+      sameSiteStr,
+      secureStr,
+      pathStr,
+      httpOnlyStr,
+      maxAgeStr,
+    ]
+      .filter(x => x)
       .join('; ');
     this.cookies.push(cookieStr);
   }
@@ -155,8 +169,7 @@ export interface HandlerPlugin<A extends HandlerAuxBase> {
 }
 
 export class HandlerPluginBase<A extends HandlerAuxBase>
-  implements HandlerPlugin<A>
-{
+  implements HandlerPlugin<A> {
   public create = (): Promise<A> | A => {
     throw new Error('Not yet implemented');
   };
