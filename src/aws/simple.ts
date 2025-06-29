@@ -45,10 +45,11 @@ export class SimpleAWS {
   private lazySqs: SQS | undefined;
   private lazyDynamodb: DynamoDBDocument | undefined;
   private lazyDynamodbAdmin: DynamoDB | undefined;
-  private static readonly structuredStageTag: Tag[] = [
-    { Key: 'STAGE', Value: currentStage.level },
-  ];
-  private static readonly stageTagging: string = `STAGE=${currentStage.level}`;
+  private static readonly stageTag: Tag = {
+    Key: 'STAGE',
+    Value: currentStage.level,
+  };
+  private static readonly stringifiedStageTag: string = `STAGE=${currentStage.level}`;
 
   constructor(config?: SimpleAWSConfig) {
     this.config = config || new SimpleAWSConfig();
@@ -308,6 +309,7 @@ export class SimpleAWS {
     bucket: string,
     localPath: string,
     key: string,
+    tags?: Tag[],
   ): Promise<string> => {
     logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
     const upload = new Upload({
@@ -319,7 +321,7 @@ export class SimpleAWS {
       },
       partSize: 5 * 1024 * 1024, // 5MB
       queueSize: 4,
-      tags: SimpleAWS.structuredStageTag,
+      tags: [SimpleAWS.stageTag, ...(tags || [])],
     });
 
     await upload.done();
@@ -330,6 +332,7 @@ export class SimpleAWS {
     bucket: string,
     key: string,
     buffer: Buffer,
+    tags?: Tag[],
   ): Promise<string> => {
     logger.debug(`Upload item[${key}] into bucket[${bucket}]`);
     const upload = new Upload({
@@ -341,7 +344,7 @@ export class SimpleAWS {
       },
       partSize: 5 * 1024 * 1024, // 5MB
       queueSize: 4,
-      tags: SimpleAWS.structuredStageTag,
+      tags: [SimpleAWS.stageTag, ...(tags || [])],
     });
     await upload.done();
     return key;
@@ -376,11 +379,14 @@ export class SimpleAWS {
     const { expiresIn = 600, unhoistableHeaders } = options;
     switch (options.operation) {
       case 'putObject': {
+        const tagging = options.params?.Tagging
+          ? SimpleAWS.stringifiedStageTag + '&' + options.params.Tagging
+          : SimpleAWS.stringifiedStageTag;
         const cmd = new PutObjectCommand({
           Bucket: options.bucket,
           Key: options.key,
           ...options.params,
-          Tagging: SimpleAWS.stageTagging,
+          Tagging: tagging,
         });
         return getSignedUrl(this.s3, cmd, {
           expiresIn: expiresIn,
@@ -464,11 +470,14 @@ export class SimpleAWS {
         });
       }
       case 'createMultipartUpload': {
+        const tagging = options.params?.Tagging
+          ? SimpleAWS.stringifiedStageTag + '&' + options.params.Tagging
+          : SimpleAWS.stringifiedStageTag;
         const cmd = new CreateMultipartUploadCommand({
           Bucket: options.bucket,
           Key: options.key,
           ...options.params,
-          Tagging: SimpleAWS.stageTagging,
+          Tagging: tagging,
         });
         return getSignedUrl(this.s3, cmd, {
           expiresIn: expiresIn,
