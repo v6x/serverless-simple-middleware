@@ -1,5 +1,5 @@
-import { ConnectionConfig } from 'mysql';
-import { PoolOptions } from 'mysql2';
+import type { ConnectionConfig } from 'mysql';
+import type { PoolOptions } from 'mysql2';
 import { HandlerAuxBase, HandlerPluginBase } from './base';
 import { ConnectionProxy } from './database/connectionProxy';
 import { SQLClient } from './database/sqlClient';

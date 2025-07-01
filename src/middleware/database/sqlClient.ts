@@ -1,9 +1,9 @@
 import { Kysely, MysqlDialect, MysqlPool } from 'kysely';
 import {
-  Connection,
-  ConnectionOptions,
   createConnection,
-  QueryError,
+  type Connection,
+  type ConnectionOptions,
+  type QueryError,
 } from 'mysql2';
 
 interface LazyMysqlPoolConnection extends Connection {

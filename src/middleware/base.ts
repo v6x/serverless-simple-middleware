@@ -1,4 +1,7 @@
-import { APIGatewayEvent, APIGatewayEventRequestContext } from 'aws-lambda';
+import type {
+  APIGatewayEvent,
+  APIGatewayEventRequestContext,
+} from 'aws-lambda';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger(__filename);

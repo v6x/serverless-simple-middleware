@@ -1,4 +1,4 @@
-import { Connection, createConnection, MysqlError } from 'mysql';
+import { createConnection, type Connection, type MysqlError } from 'mysql';
 import { getLogger } from '../../utils';
 import { MySQLPluginOptions } from '../mysql';
 
