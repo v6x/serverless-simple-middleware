@@ -133,7 +133,7 @@ export class HandlerResponse {
       httpOnlyStr,
       maxAgeStr,
     ]
-      .filter(x => x)
+      .filter((x) => x)
       .join('; ');
     this.cookies.push(cookieStr);
   }
@@ -169,7 +169,8 @@ export interface HandlerPlugin<A extends HandlerAuxBase> {
 }
 
 export class HandlerPluginBase<A extends HandlerAuxBase>
-  implements HandlerPlugin<A> {
+  implements HandlerPlugin<A>
+{
   public create = (): Promise<A> | A => {
     throw new Error('Not yet implemented');
   };

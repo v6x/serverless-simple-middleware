@@ -7,9 +7,9 @@ import {
 } from '../aws';
 import { getLogger, stringifyError } from '../utils';
 
+import { SQS } from '@aws-sdk/client-sqs';
 import { $enum } from 'ts-enum-util';
 import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
-import { SQS } from '@aws-sdk/client-sqs';
 
 const logger = getLogger(__filename);
 
