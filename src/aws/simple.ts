@@ -6,13 +6,12 @@ import {
 import { envDefault as currentStage } from 'simple-staging';
 
 import * as fs from 'fs';
-import * as os from 'os';
 import { nanoid } from 'nanoid/non-secure';
+import * as os from 'os';
 
 import { getLogger, stringifyError } from '../utils';
 import { SimpleAWSConfig } from './config';
 
-import { AWSComponent, SQSMessageBody } from './define';
 import { DynamoDB, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   AbortMultipartUploadCommand,
@@ -32,9 +31,10 @@ import {
 } from '@aws-sdk/client-s3';
 import { SQS } from '@aws-sdk/client-sqs';
 import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
+import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PresignerOptions } from '../internal/s3';
-import { Upload } from '@aws-sdk/lib-storage';
+import { AWSComponent, SQSMessageBody } from './define';
 
 const logger = getLogger(__filename);
 

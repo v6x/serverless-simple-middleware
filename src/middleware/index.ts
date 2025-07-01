@@ -13,8 +13,9 @@ export const middleware = {
   mysql,
 };
 
-export * from './base';
 export * from './aws';
-export * from './trace';
+export * from './base';
+export * from './database/index';
 export * from './logger';
 export * from './mysql';
+export * from './trace';

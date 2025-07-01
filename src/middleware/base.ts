@@ -1,4 +1,7 @@
-import * as awsTypes from 'aws-lambda'; // tslint:disable-line:no-implicit-dependencies
+import type {
+  APIGatewayEvent,
+  APIGatewayEventRequestContext,
+} from 'aws-lambda';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger(__filename);
@@ -8,8 +11,8 @@ export interface RequestAuxBase {
 }
 
 export class HandlerRequest {
-  public event: awsTypes.APIGatewayEvent;
-  public context: awsTypes.APIGatewayEventRequestContext;
+  public event: APIGatewayEvent;
+  public context: APIGatewayEventRequestContext;
   public lastError: Error | string | undefined;
 
   private lazyBody?: any;
@@ -133,7 +136,7 @@ export class HandlerResponse {
       httpOnlyStr,
       maxAgeStr,
     ]
-      .filter(x => x)
+      .filter((x) => x)
       .join('; ');
     this.cookies.push(cookieStr);
   }
@@ -169,7 +172,8 @@ export interface HandlerPlugin<A extends HandlerAuxBase> {
 }
 
 export class HandlerPluginBase<A extends HandlerAuxBase>
-  implements HandlerPlugin<A> {
+  implements HandlerPlugin<A>
+{
   public create = (): Promise<A> | A => {
     throw new Error('Not yet implemented');
   };
