@@ -87,6 +87,7 @@ export {
   type Expression,
   type ExpressionBuilder,
   type InsertQueryBuilder,
+  type NotNull,
   type RawBuilder,
   type SelectQueryBuilder,
   type SqlBool,
