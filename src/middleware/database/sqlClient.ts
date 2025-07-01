@@ -1,4 +1,10 @@
-import { Kysely, MysqlDialect, MysqlPool } from 'kysely';
+import {
+  HandleEmptyInListsPlugin,
+  Kysely,
+  MysqlDialect,
+  MysqlPool,
+  replaceWithNoncontingentExpression,
+} from 'kysely';
 import {
   createConnection,
   type Connection,
@@ -59,6 +65,11 @@ export class SQLClient<T = unknown> extends Kysely<T> {
       dialect: new MysqlDialect({
         pool,
       }),
+      plugins: [
+        new HandleEmptyInListsPlugin({
+          strategy: replaceWithNoncontingentExpression,
+        }),
+      ],
     });
     this.pool = pool;
   }
@@ -70,10 +81,14 @@ export class SQLClient<T = unknown> extends Kysely<T> {
 }
 
 export {
+  expressionBuilder,
   sql,
   type DeleteQueryBuilder,
+  type Expression,
   type ExpressionBuilder,
   type InsertQueryBuilder,
+  type RawBuilder,
   type SelectQueryBuilder,
+  type SqlBool,
   type UpdateQueryBuilder,
 } from 'kysely';
