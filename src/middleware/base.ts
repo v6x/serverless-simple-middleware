@@ -1,4 +1,4 @@
-import * as awsTypes from 'aws-lambda'; // tslint:disable-line:no-implicit-dependencies
+import { APIGatewayEvent, APIGatewayEventRequestContext } from 'aws-lambda';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger(__filename);
@@ -8,8 +8,8 @@ export interface RequestAuxBase {
 }
 
 export class HandlerRequest {
-  public event: awsTypes.APIGatewayEvent;
-  public context: awsTypes.APIGatewayEventRequestContext;
+  public event: APIGatewayEvent;
+  public context: APIGatewayEventRequestContext;
   public lastError: Error | string | undefined;
 
   private lazyBody?: any;

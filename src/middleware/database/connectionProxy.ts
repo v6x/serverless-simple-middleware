@@ -1,4 +1,4 @@
-import * as mysql from 'mysql';
+import { Connection, createConnection, MysqlError } from 'mysql';
 import { getLogger } from '../../utils';
 import { MySQLPluginOptions } from '../mysql';
 
@@ -6,7 +6,7 @@ const logger = getLogger(__filename);
 
 export class ConnectionProxy {
   private pluginConfig: MySQLPluginOptions;
-  private connection?: mysql.Connection;
+  private connection?: Connection;
 
   private initialized: boolean;
   private dbName?: string;
@@ -27,7 +27,7 @@ export class ConnectionProxy {
       if (process.env.NODE_ENV !== 'test') {
         logger.silly(`Execute query[${sql}] with params[${params}]`);
       }
-      connection.query(sql, params, (err: mysql.MysqlError, result?: T) => {
+      connection.query(sql, params, (err: MysqlError, result?: T) => {
         if (err) {
           logger.error(`error occurred in database query=${sql}, error=${err}`);
           reject(err);
@@ -57,7 +57,7 @@ export class ConnectionProxy {
       const connection = this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
-      connection.beginTransaction((err: mysql.MysqlError) => {
+      connection.beginTransaction((err: MysqlError) => {
         if (err) {
           reject(err);
           return;
@@ -71,7 +71,7 @@ export class ConnectionProxy {
       const connection = this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
-      connection.commit((err: mysql.MysqlError) => {
+      connection.commit((err: MysqlError) => {
         if (err) {
           reject(err);
           return;
@@ -85,7 +85,7 @@ export class ConnectionProxy {
       const connection = this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
-      connection.rollback((err: mysql.MysqlError) => {
+      connection.rollback((err: MysqlError) => {
         if (err) {
           reject(err);
           return;
@@ -108,7 +108,7 @@ export class ConnectionProxy {
     if (this.connection) {
       return this.connection;
     }
-    this.connection = mysql.createConnection(this.pluginConfig.config);
+    this.connection = createConnection(this.pluginConfig.config);
     this.connection.connect();
     return this.connection;
   };

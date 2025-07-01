@@ -1,12 +1,11 @@
-import * as mysql from 'mysql';
-import * as mysql2 from 'mysql2';
-
+import { ConnectionConfig } from 'mysql';
+import { PoolOptions } from 'mysql2';
 import { HandlerAuxBase, HandlerPluginBase } from './base';
 import { ConnectionProxy } from './database/connectionProxy';
 import { SQLClient } from './database/sqlClient';
 
 export interface MySQLPluginOptions {
-  config: mysql.ConnectionConfig & mysql2.PoolOptions;
+  config: ConnectionConfig & PoolOptions;
   schema?: {
     eager?: boolean;
     ignoreError?: boolean;

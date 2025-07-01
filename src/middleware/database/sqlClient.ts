@@ -1,14 +1,19 @@
 import { Kysely, MysqlDialect, MysqlPool } from 'kysely';
-import * as mysql2 from 'mysql2';
+import {
+  Connection,
+  ConnectionOptions,
+  createConnection,
+  QueryError,
+} from 'mysql2';
 
-interface LazyMysqlPoolConnection extends mysql2.Connection {
+interface LazyMysqlPoolConnection extends Connection {
   release: () => void;
 }
 
 class LazyConnectionPool implements MysqlPool {
   private connection: LazyMysqlPoolConnection | null = null;
 
-  constructor(private config: mysql2.ConnectionOptions) {}
+  constructor(private config: ConnectionOptions) {}
 
   public getConnection = (
     callback: (error: unknown, connection: LazyMysqlPoolConnection) => void,
@@ -17,8 +22,8 @@ class LazyConnectionPool implements MysqlPool {
       callback(null, this.connection);
       return;
     }
-    const conn = mysql2.createConnection(this.config);
-    conn.connect((err: mysql2.QueryError) => {
+    const conn = createConnection(this.config);
+    conn.connect((err: QueryError) => {
       if (err) {
         callback(err, {} as LazyMysqlPoolConnection);
         return;
@@ -30,7 +35,7 @@ class LazyConnectionPool implements MysqlPool {
 
   public end = (callback: (error: unknown) => void): void => {
     if (this.connection) {
-      this.connection.end((err: mysql2.QueryError) => {
+      this.connection.end((err: QueryError) => {
         this.connection = null;
         callback(err);
       });
@@ -39,9 +44,7 @@ class LazyConnectionPool implements MysqlPool {
     }
   };
 
-  private _addRelease = (
-    connection: mysql2.Connection,
-  ): LazyMysqlPoolConnection =>
+  private _addRelease = (connection: Connection): LazyMysqlPoolConnection =>
     Object.assign(connection, {
       release: () => {},
     });
@@ -50,7 +53,7 @@ class LazyConnectionPool implements MysqlPool {
 export class SQLClient<T = unknown> extends Kysely<T> {
   private pool: LazyConnectionPool;
 
-  constructor(config: mysql2.ConnectionOptions) {
+  constructor(config: ConnectionOptions) {
     const pool = new LazyConnectionPool(config);
     super({
       dialect: new MysqlDialect({
