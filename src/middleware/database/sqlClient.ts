@@ -83,7 +83,6 @@ export class SQLClient<T = unknown> extends Kysely<T> {
 export {
   expressionBuilder,
   sql,
-  type CaseBuilder,
   type DeleteQueryBuilder,
   type DeleteResult,
   type Expression,
