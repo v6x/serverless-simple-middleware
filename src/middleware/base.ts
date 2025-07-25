@@ -77,10 +77,14 @@ export class HandlerResponse {
 
   public ok(body = {}, code = 200) {
     logger.stupid(`ok`, body);
-    const headers = {
+    const exposeHeaders = Object.keys(this.customHeaders).join(', ');
+    const headers: { [key: string]: any } = {
       ...CORS_HEADERS,
       ...this.customHeaders,
     };
+    if (exposeHeaders) {
+      headers['Access-Control-Expose-Headers'] = exposeHeaders;
+    }
     if (this.crossOrigin) {
       headers['Access-Control-Allow-Origin'] = this.crossOrigin;
     }
