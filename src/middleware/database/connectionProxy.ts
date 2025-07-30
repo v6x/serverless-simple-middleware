@@ -102,6 +102,14 @@ export class ConnectionProxy {
     }
   };
 
+  public destroyConnection = () => {
+    if (this.connection) {
+      this.connection.destroy();
+      this.connection = undefined;
+      logger.verbose('Connection is destroyed');
+    }
+  };
+
   public onPluginCreated = async () => this.tryToInitializeSchema(true);
 
   private prepareConnection = () => {
