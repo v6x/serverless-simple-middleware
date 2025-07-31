@@ -90,11 +90,9 @@ export class SQLClient<T = unknown> extends Kysely<T> {
    * Destroy the connection socket immediately. No further events or callbacks will be triggered.
    * This should be used only for special use cases!
    */
-  public destroyConnection = () =>
-    new Promise<void>((resolve) => {
-      this.pool.destroy();
-      resolve();
-    });
+  public destroyConnection = (): void => {
+    this.pool.destroy();
+  };
 }
 
 export {
