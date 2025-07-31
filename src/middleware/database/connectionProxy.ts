@@ -102,6 +102,10 @@ export class ConnectionProxy {
     }
   };
 
+  /**
+   * Destroy the connection socket immediately. No further events or callbacks will be triggered.
+   * This should be used only for special use cases!
+   */
   public destroyConnection = () => {
     if (this.connection) {
       this.connection.destroy();
