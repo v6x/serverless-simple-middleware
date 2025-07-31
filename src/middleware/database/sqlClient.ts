@@ -50,6 +50,13 @@ class LazyConnectionPool implements MysqlPool {
     }
   };
 
+  public destroy = (): void => {
+    if (this.connection) {
+      this.connection.destroy();
+      this.connection = null;
+    }
+  };
+
   private _addRelease = (connection: Connection): LazyMysqlPoolConnection =>
     Object.assign(connection, {
       release: () => {},
@@ -78,6 +85,14 @@ export class SQLClient<T = unknown> extends Kysely<T> {
     new Promise<void>((resolve) => {
       this.pool.end(() => resolve());
     });
+
+  /**
+   * Destroy the connection socket immediately. No further events or callbacks will be triggered.
+   * This should be used only for special use cases!
+   */
+  public destroyConnection = (): void => {
+    this.pool.destroy();
+  };
 }
 
 export {
