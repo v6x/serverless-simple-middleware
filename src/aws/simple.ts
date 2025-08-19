@@ -1,6 +1,7 @@
 import {
   CloudfrontSignedCookiesOutput,
   getSignedCookies,
+  getSignedUrl as getCloudFrontSignedUrl,
 } from '@aws-sdk/cloudfront-signer';
 
 import { envDefault as currentStage } from 'simple-staging';
@@ -541,6 +542,20 @@ export class SimpleAWS {
       keyPairId,
       privateKey,
       policy,
+    });
+  };
+
+  public getCloudFrontSignedUrl = (
+    keyPairId: string,
+    privateKey: string,
+    url: string,
+    expires: number,
+  ): string => {
+    return getCloudFrontSignedUrl({
+      keyPairId,
+      privateKey,
+      url,
+      dateLessThan: new Date(expires * 1000),
     });
   };
 
