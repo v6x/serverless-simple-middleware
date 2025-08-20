@@ -1,7 +1,7 @@
 import {
   CloudfrontSignedCookiesOutput,
-  getSignedCookies,
   getSignedUrl as getCloudFrontSignedUrl,
+  getSignedCookies,
 } from '@aws-sdk/cloudfront-signer';
 
 import { envDefault as currentStage } from 'simple-staging';
@@ -545,17 +545,21 @@ export class SimpleAWS {
     });
   };
 
+  /**
+   * Get signed cookies for CloudFront
+   * @param expiresSec - The expiration time in seconds (default 7 days)
+   */
   public getCloudFrontSignedUrl = (
     keyPairId: string,
     privateKey: string,
     url: string,
-    expires: number,
+    expiresSec: number = 7 * 24 * 60 * 60, // 7 days
   ): string => {
     return getCloudFrontSignedUrl({
       keyPairId,
       privateKey,
       url,
-      dateLessThan: new Date(expires * 1000),
+      dateLessThan: new Date(expiresSec * 1000),
     });
   };
 
