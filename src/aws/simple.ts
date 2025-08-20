@@ -559,7 +559,7 @@ export class SimpleAWS {
       keyPairId,
       privateKey,
       url,
-      dateLessThan: new Date(expiresSec * 1000),
+      dateLessThan: new Date(Date.now() + expiresSec * 1000),
     });
   };
 
