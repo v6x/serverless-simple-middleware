@@ -546,7 +546,7 @@ export class SimpleAWS {
   };
 
   /**
-   * Get signed cookies for CloudFront
+   * Get signed URL for CloudFront
    * @param expiresSec - The expiration time in seconds (default 7 days)
    */
   public getCloudFrontSignedUrl = (
