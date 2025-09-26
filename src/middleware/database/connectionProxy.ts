@@ -1,43 +1,58 @@
-import { createConnection, type Connection, type MysqlError } from 'mysql';
+import {
+  createConnection,
+  type Connection,
+  type ConnectionOptions,
+  type FieldPacket,
+  type QueryError,
+  type QueryResult,
+} from 'mysql2';
 import { getLogger } from '../../utils';
+import { SecretsManagerCache } from '../../utils/secretsManager';
 import { MySQLPluginOptions } from '../mysql';
 
 const logger = getLogger(__filename);
 
 export class ConnectionProxy {
-  private pluginConfig: MySQLPluginOptions;
   private connection?: Connection;
+  private connectionConfig: ConnectionOptions;
+  private secretsCache: SecretsManagerCache;
 
   private initialized: boolean;
   private dbName?: string;
 
-  public constructor(config: MySQLPluginOptions) {
-    this.pluginConfig = config;
-    if (config.schema && config.schema.database) {
-      this.dbName = config.config.database;
-      config.config.database = undefined;
+  public constructor(private readonly options: MySQLPluginOptions) {
+    if (options.schema && options.schema.database) {
+      this.dbName = options.config.database;
+      options.config.database = undefined;
     }
+    this.secretsCache = SecretsManagerCache.getInstance();
   }
 
   public query = <T>(sql: string, params?: any[]) =>
     new Promise<T | undefined>(async (resolve, reject) => {
-      const connection = this.prepareConnection();
+      const connection = await this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
       if (process.env.NODE_ENV !== 'test') {
         logger.silly(`Execute query[${sql}] with params[${params}]`);
       }
-      connection.query(sql, params, (err: MysqlError, result?: T) => {
-        if (err) {
-          logger.error(`error occurred in database query=${sql}, error=${err}`);
-          reject(err);
-        } else {
-          resolve(result);
-          if (process.env.NODE_ENV !== 'test') {
-            logger.silly(`DB result is ${JSON.stringify(result)}`);
+      connection.query(
+        sql,
+        params,
+        (err: QueryError, result: QueryResult, _fields?: FieldPacket[]) => {
+          if (err) {
+            logger.error(
+              `error occurred in database query=${sql}, error=${err}`,
+            );
+            reject(err);
+          } else {
+            resolve(result as T);
+            if (process.env.NODE_ENV !== 'test') {
+              logger.silly(`DB result is ${JSON.stringify(result)}`);
+            }
           }
-        }
-      });
+        },
+      );
     });
 
   public fetch = <T>(sql: string, params?: any[]) =>
@@ -54,10 +69,10 @@ export class ConnectionProxy {
 
   public beginTransaction = () =>
     new Promise<void>(async (resolve, reject) => {
-      const connection = this.prepareConnection();
+      const connection = await this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
-      connection.beginTransaction((err: MysqlError) => {
+      connection.beginTransaction((err: QueryError) => {
         if (err) {
           reject(err);
           return;
@@ -68,10 +83,10 @@ export class ConnectionProxy {
 
   public commit = () =>
     new Promise<void>(async (resolve, reject) => {
-      const connection = this.prepareConnection();
+      const connection = await this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
-      connection.commit((err: MysqlError) => {
+      connection.commit((err: QueryError) => {
         if (err) {
           reject(err);
           return;
@@ -82,10 +97,10 @@ export class ConnectionProxy {
 
   public rollback = () =>
     new Promise<void>(async (resolve, reject) => {
-      const connection = this.prepareConnection();
+      const connection = await this.prepareConnection();
       await this.tryToInitializeSchema(false);
 
-      connection.rollback((err: MysqlError) => {
+      connection.rollback((err: QueryError) => {
         if (err) {
           reject(err);
           return;
@@ -116,23 +131,50 @@ export class ConnectionProxy {
 
   public onPluginCreated = async () => this.tryToInitializeSchema(true);
 
-  private prepareConnection = () => {
+  private prepareConnection = async (): Promise<Connection> => {
     if (this.connection) {
       return this.connection;
     }
-    this.connection = createConnection(this.pluginConfig.config);
+
+    await this.ensureConnectionConfig();
+    this.connection = createConnection(this.connectionConfig);
     this.connection.connect();
     return this.connection;
   };
 
-  private changeDatabase = (dbName: string) =>
+  private ensureConnectionConfig = async (): Promise<void> => {
+    if (this.connectionConfig) {
+      return;
+    }
+
+    this.connectionConfig = this.options.config;
+
+    if (!this.options.secretId) {
+      return;
+    }
+    const credentials = await this.secretsCache.getDatabaseCredentials(
+      this.options.secretId,
+    );
+
+    this.connectionConfig = {
+      ...this.options.config,
+      user: credentials.username,
+      password: credentials.password,
+    };
+  };
+
+  private changeDatabase = async (dbName: string) =>
     new Promise<void>((resolve, reject) =>
-      this.prepareConnection().changeUser(
-        {
-          database: dbName,
-        },
-        (err) => (err ? reject(err) : resolve(undefined)),
-      ),
+      this.prepareConnection()
+        .then((connection) =>
+          connection.changeUser(
+            {
+              database: dbName,
+            },
+            (err) => (err ? reject(err) : resolve(undefined)),
+          ),
+        )
+        .catch(reject),
     );
 
   private tryToInitializeSchema = async (initial: boolean) => {
@@ -141,7 +183,7 @@ export class ConnectionProxy {
       ignoreError = false,
       database = '',
       tables = {},
-    } = this.pluginConfig.schema || {};
+    } = this.options.schema || {};
     if (initial && !eager) {
       return;
     }

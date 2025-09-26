@@ -1,16 +1,19 @@
 import {
   HandleEmptyInListsPlugin,
   Kysely,
+  type KyselyConfig,
   MysqlDialect,
-  MysqlPool,
+  type MysqlPool,
   replaceWithNoncontingentExpression,
 } from 'kysely';
 import {
-  createConnection,
   type Connection,
   type ConnectionOptions,
+  createConnection,
   type QueryError,
 } from 'mysql2';
+import { SecretsManagerCache } from '../../utils/secretsManager';
+import { MySQLPluginOptions } from '../mysql';
 
 interface LazyMysqlPoolConnection extends Connection {
   release: () => void;
@@ -18,8 +21,33 @@ interface LazyMysqlPoolConnection extends Connection {
 
 class LazyConnectionPool implements MysqlPool {
   private connection: LazyMysqlPoolConnection | null = null;
+  private connectionConfig: ConnectionOptions;
+  private secretsCache: SecretsManagerCache;
 
-  constructor(private config: ConnectionOptions) {}
+  constructor(private readonly options: MySQLPluginOptions) {
+    this.secretsCache = SecretsManagerCache.getInstance();
+  }
+
+  private ensureConnectionConfig = async (): Promise<void> => {
+    if (this.connectionConfig) {
+      return;
+    }
+
+    this.connectionConfig = this.options.config;
+
+    if (!this.options.secretId) {
+      return;
+    }
+    const credentials = await this.secretsCache.getDatabaseCredentials(
+      this.options.secretId,
+    );
+
+    this.connectionConfig = {
+      ...this.options.config,
+      user: credentials.username,
+      password: credentials.password,
+    };
+  };
 
   public getConnection = (
     callback: (error: unknown, connection: LazyMysqlPoolConnection) => void,
@@ -28,14 +56,17 @@ class LazyConnectionPool implements MysqlPool {
       callback(null, this.connection);
       return;
     }
-    const conn = createConnection(this.config);
-    conn.connect((err: QueryError) => {
-      if (err) {
-        callback(err, {} as LazyMysqlPoolConnection);
-        return;
-      }
-      this.connection = this._addRelease(conn);
-      callback(null, this.connection);
+
+    this.ensureConnectionConfig().then(() => {
+      const conn = createConnection(this.connectionConfig);
+      conn.connect((err: QueryError) => {
+        if (err) {
+          callback(err, {} as LazyMysqlPoolConnection);
+          return;
+        }
+        this.connection = this._addRelease(conn);
+        callback(null, this.connection);
+      });
     });
   };
 
@@ -66,9 +97,9 @@ class LazyConnectionPool implements MysqlPool {
 export class SQLClient<T = unknown> extends Kysely<T> {
   private pool: LazyConnectionPool;
 
-  constructor(config: ConnectionOptions) {
+  constructor(config: MySQLPluginOptions) {
     const pool = new LazyConnectionPool(config);
-    super({
+    const kyselyConfig: KyselyConfig = {
       dialect: new MysqlDialect({
         pool,
       }),
@@ -77,7 +108,8 @@ export class SQLClient<T = unknown> extends Kysely<T> {
           strategy: replaceWithNoncontingentExpression,
         }),
       ],
-    });
+    };
+    super(kyselyConfig);
     this.pool = pool;
   }
 
