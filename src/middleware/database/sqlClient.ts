@@ -12,6 +12,7 @@ import {
   createConnection,
   type QueryError,
 } from 'mysql2';
+import { OncePromise } from '../../internal/oncePromise';
 import { SecretsManagerCache } from '../../utils/secretsManager';
 import { MySQLPluginOptions } from '../mysql';
 
@@ -23,6 +24,8 @@ class LazyConnectionPool implements MysqlPool {
   private connection: LazyMysqlPoolConnection | null = null;
   private connectionConfig: ConnectionOptions;
   private secretsCache: SecretsManagerCache;
+  private configInitOnce = new OncePromise<void>();
+  private connectionInitOnce = new OncePromise<LazyMysqlPoolConnection>();
 
   constructor(private readonly options: MySQLPluginOptions) {
     this.secretsCache = SecretsManagerCache.getInstance();
@@ -33,20 +36,22 @@ class LazyConnectionPool implements MysqlPool {
       return;
     }
 
-    this.connectionConfig = this.options.config;
+    await this.configInitOnce.run(async () => {
+      const baseConfig = this.options.config;
+      if (!this.options.secretId) {
+        this.connectionConfig = baseConfig;
+        return;
+      }
+      const credentials = await this.secretsCache.getDatabaseCredentials(
+        this.options.secretId,
+      );
 
-    if (!this.options.secretId) {
-      return;
-    }
-    const credentials = await this.secretsCache.getDatabaseCredentials(
-      this.options.secretId,
-    );
-
-    this.connectionConfig = {
-      ...this.options.config,
-      user: credentials.username,
-      password: credentials.password,
-    };
+      this.connectionConfig = {
+        ...baseConfig,
+        user: credentials.username,
+        password: credentials.password,
+      };
+    });
   };
 
   public getConnection = (
@@ -57,17 +62,24 @@ class LazyConnectionPool implements MysqlPool {
       return;
     }
 
-    this.ensureConnectionConfig().then(() => {
-      const conn = createConnection(this.connectionConfig);
-      conn.connect((err: QueryError) => {
-        if (err) {
-          callback(err, {} as LazyMysqlPoolConnection);
-          return;
-        }
-        this.connection = this._addRelease(conn);
-        callback(null, this.connection);
-      });
-    });
+    this.connectionInitOnce
+      .run(async () => {
+        await this.ensureConnectionConfig();
+        const conn = createConnection(this.connectionConfig);
+        return await new Promise<LazyMysqlPoolConnection>((resolve, reject) => {
+          conn.connect((err: QueryError) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            const wrapped = this._addRelease(conn);
+            this.connection = wrapped;
+            resolve(wrapped);
+          });
+        });
+      })
+      .then((conn) => callback(null, conn))
+      .catch((err) => callback(err, {} as LazyMysqlPoolConnection));
   };
 
   public end = (callback: (error: unknown) => void): void => {

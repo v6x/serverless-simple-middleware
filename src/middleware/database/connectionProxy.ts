@@ -6,6 +6,7 @@ import {
   type QueryError,
   type QueryResult,
 } from 'mysql2';
+import { OncePromise } from '../../internal/oncePromise';
 import { getLogger } from '../../utils';
 import { SecretsManagerCache } from '../../utils/secretsManager';
 import { MySQLPluginOptions } from '../mysql';
@@ -16,6 +17,8 @@ export class ConnectionProxy {
   private connection?: Connection;
   private connectionConfig: ConnectionOptions;
   private secretsCache: SecretsManagerCache;
+  private configInitOnce = new OncePromise<void>();
+  private connectionInitOnce = new OncePromise<Connection>();
 
   private initialized: boolean;
   private dbName?: string;
@@ -136,10 +139,13 @@ export class ConnectionProxy {
       return this.connection;
     }
 
-    await this.ensureConnectionConfig();
-    this.connection = createConnection(this.connectionConfig);
-    this.connection.connect();
-    return this.connection;
+    return await this.connectionInitOnce.run(async () => {
+      await this.ensureConnectionConfig();
+      const conn = createConnection(this.connectionConfig);
+      conn.connect();
+      this.connection = conn;
+      return this.connection;
+    });
   };
 
   private ensureConnectionConfig = async (): Promise<void> => {
@@ -147,20 +153,21 @@ export class ConnectionProxy {
       return;
     }
 
-    this.connectionConfig = this.options.config;
-
-    if (!this.options.secretId) {
-      return;
-    }
-    const credentials = await this.secretsCache.getDatabaseCredentials(
-      this.options.secretId,
-    );
-
-    this.connectionConfig = {
-      ...this.options.config,
-      user: credentials.username,
-      password: credentials.password,
-    };
+    await this.configInitOnce.run(async () => {
+      const baseConfig = this.options.config;
+      if (!this.options.secretId) {
+        this.connectionConfig = baseConfig;
+        return;
+      }
+      const credentials = await this.secretsCache.getDatabaseCredentials(
+        this.options.secretId,
+      );
+      this.connectionConfig = {
+        ...baseConfig,
+        user: credentials.username,
+        password: credentials.password,
+      };
+    });
   };
 
   private changeDatabase = async (dbName: string) =>
