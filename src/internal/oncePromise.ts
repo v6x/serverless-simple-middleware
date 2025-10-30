@@ -15,8 +15,9 @@ export class OncePromise<T> {
       this.promise = f();
       try {
         return await this.promise;
-      } finally {
+      } catch (err) {
         this.promise = undefined;
+        throw err;
       }
     }
     return this.promise;

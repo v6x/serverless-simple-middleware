@@ -4,6 +4,7 @@ import {
 } from '@aws-sdk/client-secrets-manager';
 import type { DatabaseCredentials } from '../middleware/mysql';
 import { getLogger } from './logger';
+import { stringifyError } from './misc';
 
 const logger = getLogger(__filename);
 
@@ -31,6 +32,7 @@ export class SecretsManagerCache {
 
   public async getSecret<T = any>(secretId: string): Promise<T> {
     if (this.cache.has(secretId)) {
+      logger.debug(`Secret ${secretId} found in cache`);
       return this.cache.get(secretId);
     }
 
@@ -48,7 +50,9 @@ export class SecretsManagerCache {
 
       return secretValue;
     } catch (error) {
-      logger.error(`Failed to fetch secret ${secretId}:`);
+      logger.error(
+        `Failed to fetch secret ${secretId}: ${stringifyError(error)}`,
+      );
       throw error;
     }
   }
