@@ -266,7 +266,6 @@ const build = <Aux extends HandlerAuxBase>(
     });
 
   return Object.assign(invoke, {
-    safeInvoke: invokeWithBody,
     invokeWithBody,
     invokeWithQuery,
   });

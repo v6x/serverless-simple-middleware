@@ -45,6 +45,10 @@ export class HandlerRequest {
     return this.event.queryStringParameters || {};
   }
 
+  set query(value: { [key: string]: any }) {
+    this.event.queryStringParameters = value;
+  }
+
   public header(key: string) {
     return this.event.headers
       ? this.event.headers[key] || this.event.headers[key.toLowerCase()]
