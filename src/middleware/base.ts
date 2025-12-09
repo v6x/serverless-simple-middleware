@@ -33,6 +33,10 @@ export class HandlerRequest {
     return this.lazyBody || {};
   }
 
+  set body(value: any) {
+    this.lazyBody = value;
+  }
+
   get path(): { [key: string]: string | undefined } {
     return this.event.pathParameters || {};
   }

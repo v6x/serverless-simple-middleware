@@ -201,7 +201,7 @@ const build = <Aux extends HandlerAuxBase>(
       const typedRequest = request as Omit<HandlerRequest, 'body'> & {
         body: S;
       };
-      (typedRequest as any).body = parsed.data;
+      typedRequest.body = parsed.data;
       return handler({
         request: typedRequest,
         response,
