@@ -172,13 +172,12 @@ const build = <Aux extends HandlerAuxBase>(
     };
 
   /**
-   * @param validation - The validation schema and onInvalid handler
-   *   - schema: The Zod schema to validate the request body
-   *   - onInvalid: A callback function to handle invalid requests. If the callback returns a value, it will be returned instead of the response.fail(parsed.error, 400).
+   * @param validation
+   *   - schema: Zod schema to validate the request body
+   *   - onInvalid: Callback function to handle invalid requests. If the callback returns a value, it will be returned instead of zod error.
    * @param handler
-   * @returns
    */
-  const safeInvoke = <S, T>(
+  const safeInvoke = <S>(
     validation: {
       schema: ZodSchema<S>;
       onInvalid?:
@@ -194,7 +193,7 @@ const build = <Aux extends HandlerAuxBase>(
       request: Omit<HandlerRequest, 'body'> & { body: S };
       response: HandlerResponse;
       aux: Aux & { schema: S };
-    }) => Promise<T>,
+    }) => any,
   ) =>
     invoke(async ({ request, response, aux }) => {
       const parsed = validation.schema.safeParse(request.body);
