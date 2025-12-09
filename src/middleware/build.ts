@@ -178,16 +178,23 @@ const build = <Aux extends HandlerAuxBase>(
    * @param handler
    * @returns
    */
-  const safeInvoke = <S>(
+  const safeInvoke = <S, T>(
     validation: {
       schema: ZodSchema<S>;
-      onInvalid?: (error: ZodError) => { statusCode: number; body: any } | void;
+      onInvalid?:
+        | ((
+            error: ZodError,
+          ) =>
+            | { statusCode: number; body: any }
+            | Promise<{ statusCode: number; body: any } | void>
+            | void)
+        | undefined;
     },
     handler: (context: {
       request: Omit<HandlerRequest, 'body'> & { body: S };
       response: HandlerResponse;
       aux: Aux & { schema: S };
-    }) => any,
+    }) => Promise<T>,
   ) =>
     invoke(async ({ request, response, aux }) => {
       const parsed = validation.schema.safeParse(request.body);
