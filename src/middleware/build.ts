@@ -1,6 +1,6 @@
 import { getLogger } from '../utils/logger';
 
-import type { ZodError, ZodSchema } from 'zod';
+import { treeifyError, type ZodError, type ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import {
   Handler,
@@ -179,7 +179,12 @@ const build = <Aux extends HandlerAuxBase>(
    * @returns
    */
   const safeInvoke = <S>(
-    validation: { schema: ZodSchema<S>; onInvalid?: (error: ZodError) => any },
+    validation: {
+      schema: ZodSchema<S>;
+      onInvalid?: (
+        error: ZodError,
+      ) => { statusCode: number; body: any } | undefined;
+    },
     handler: (context: {
       request: Omit<HandlerRequest, 'body'> & { body: S };
       response: HandlerResponse;
@@ -195,7 +200,7 @@ const build = <Aux extends HandlerAuxBase>(
             return result;
           }
         }
-        return response.fail(parsed.error, 400);
+        return response.fail(treeifyError(parsed.error), 400);
       }
 
       const typedRequest = request as Omit<HandlerRequest, 'body'> & {
