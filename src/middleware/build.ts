@@ -172,37 +172,34 @@ const build = <Aux extends HandlerAuxBase>(
     };
 
   /**
-   * @param validation
-   *   - schema: Zod schema to validate the request body
-   *   - onInvalid: Callback function to handle invalid requests. If the callback returns a value, it will be returned instead of zod error.
-   * @param handler
+   * @param schema - Zod schema to validate the request body.
+   * @param handler - Handler that receives the validated body.
+   * @param onInvalid - Optional callback to customize invalid responses. If it
+   *   returns `{ statusCode, body }`, that is sent instead of the default zod
+   *   error payload.
    */
-  const safeInvoke = <S>(
-    validation: {
-      schema: ZodSchema<S>;
-      onInvalid?:
-        | ((
-            error: ZodError,
-          ) =>
-            | { statusCode: number; body: any }
-            | Promise<{ statusCode: number; body: any } | void>
-            | void)
-        | undefined;
-    },
+  const invokeWithBody = <S>(
+    schema: ZodSchema<S>,
     handler: (context: {
       request: Omit<HandlerRequest, 'body'> & { body: S };
       response: HandlerResponse;
       aux: Aux & { schema: S };
     }) => any,
+    onInvalid?: (
+      error: ZodError,
+    ) =>
+      | { statusCode: number; body: any }
+      | Promise<{ statusCode: number; body: any } | void>
+      | void,
   ) =>
     invoke(async ({ request, response, aux }) => {
-      const parsed = validation.schema.safeParse(request.body);
+      const parsed = schema.safeParse(request.body);
       if (!parsed.success) {
         logger.error(
           `Validation failed: ${stringifyError(treeifyError(parsed.error))}`,
         );
-        if (validation.onInvalid) {
-          const result = await validation.onInvalid(parsed.error);
+        if (onInvalid) {
+          const result = await onInvalid(parsed.error);
           if (result) {
             return response.fail(result.body, result.statusCode);
           }
@@ -220,6 +217,58 @@ const build = <Aux extends HandlerAuxBase>(
         aux: { ...aux, schema: parsed.data },
       });
     });
-  return Object.assign(invoke, { safeInvoke });
+
+  /**
+   * @param schema - Zod schema to validate the request query.
+   * @param handler - Handler that receives the validated query.
+   * @param onInvalid - Optional callback to customize invalid responses. If it
+   *   returns `{ statusCode, body }`, that is sent instead of the default zod
+   *   error payload.
+   */
+  const invokeWithQuery = <Q>(
+    schema: ZodSchema<Q>,
+    handler: (context: {
+      request: Omit<HandlerRequest, 'query'> & { query: Q };
+      response: HandlerResponse;
+      aux: Aux;
+    }) => any,
+    onInvalid?: (
+      error: ZodError<Q>,
+    ) =>
+      | { statusCode: number; body: any }
+      | Promise<{ statusCode: number; body: any } | void>
+      | void,
+  ) =>
+    invoke(async ({ request, response, aux }) => {
+      const parsed = schema.safeParse(request.query);
+      if (!parsed.success) {
+        logger.error(
+          `Validation failed: ${stringifyError(treeifyError(parsed.error))}`,
+        );
+        if (onInvalid) {
+          const result = await onInvalid(parsed.error);
+          if (result) {
+            return response.fail(result.body, result.statusCode);
+          }
+        }
+        return response.fail(treeifyError(parsed.error), 400);
+      }
+
+      const typedRequest = request as Omit<HandlerRequest, 'query'> & {
+        query: Q;
+      };
+      typedRequest.query = parsed.data;
+      return handler({
+        request: typedRequest,
+        response,
+        aux,
+      });
+    });
+
+  return Object.assign(invoke, {
+    safeInvoke: invokeWithBody,
+    invokeWithBody,
+    invokeWithQuery,
+  });
 };
 export default build;
