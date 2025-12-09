@@ -181,9 +181,7 @@ const build = <Aux extends HandlerAuxBase>(
   const safeInvoke = <S>(
     validation: {
       schema: ZodSchema<S>;
-      onInvalid?: (
-        error: ZodError,
-      ) => { statusCode: number; body: any } | undefined;
+      onInvalid?: (error: ZodError) => { statusCode: number; body: any } | void;
     },
     handler: (context: {
       request: Omit<HandlerRequest, 'body'> & { body: S };
@@ -194,10 +192,13 @@ const build = <Aux extends HandlerAuxBase>(
     invoke(async ({ request, response, aux }) => {
       const parsed = validation.schema.safeParse(request.body);
       if (!parsed.success) {
+        logger.error(
+          `Validation failed: ${stringifyError(treeifyError(parsed.error))}`,
+        );
         if (validation.onInvalid) {
           const result = await validation.onInvalid(parsed.error);
           if (result) {
-            return result;
+            return response.fail(result.body, result.statusCode);
           }
         }
         return response.fail(treeifyError(parsed.error), 400);
