@@ -1,6 +1,6 @@
 import { getLogger } from '../utils/logger';
 
-import type { ZodSchema } from 'zod';
+import type { ZodError, ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import {
   Handler,
@@ -171,23 +171,41 @@ const build = <Aux extends HandlerAuxBase>(
       new HandlerProxy<Aux>(event, context, callback).call(middleware, handler);
     };
 
+  /**
+   * @param validation - The validation schema and onInvalid handler
+   *   - schema: The Zod schema to validate the request body
+   *   - onInvalid: A callback function to handle invalid requests. If the callback returns a value, it will be returned instead of the response.fail(parsed.error, 400).
+   * @param handler
+   * @returns
+   */
   const safeInvoke = <S>(
-    schema: ZodSchema<S>,
-    handler: Handler<Aux & { schema: S }>,
+    validation: { schema: ZodSchema<S>; onInvalid?: (error: ZodError) => any },
+    handler: (context: {
+      request: HandlerRequest & { body: S };
+      response: HandlerResponse;
+      aux: Aux & { schema: S };
+    }) => any,
   ) =>
     invoke(async ({ request, response, aux }) => {
-      const parsed = schema.safeParse(request.body);
+      const parsed = validation.schema.safeParse(request.body);
       if (!parsed.success) {
-        response.fail(parsed.error);
-        return;
+        if (validation.onInvalid) {
+          const result = await validation.onInvalid(parsed.error);
+          if (result) {
+            return result;
+          }
+        }
+        return response.fail(parsed.error, 400);
       }
+
+      const typedRequest = request as HandlerRequest & { body: S };
+      (typedRequest as any).body = parsed.data;
       return handler({
-        request,
+        request: typedRequest,
         response,
         aux: { ...aux, schema: parsed.data },
       });
     });
-  // return { invoke, invokeWithSchemaValidation };
   return Object.assign(invoke, { safeInvoke });
 };
 export default build;
