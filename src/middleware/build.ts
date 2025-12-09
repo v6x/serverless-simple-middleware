@@ -181,7 +181,7 @@ const build = <Aux extends HandlerAuxBase>(
   const safeInvoke = <S>(
     validation: { schema: ZodSchema<S>; onInvalid?: (error: ZodError) => any },
     handler: (context: {
-      request: HandlerRequest & { body: S };
+      request: Omit<HandlerRequest, 'body'> & { body: S };
       response: HandlerResponse;
       aux: Aux & { schema: S };
     }) => any,
@@ -198,7 +198,9 @@ const build = <Aux extends HandlerAuxBase>(
         return response.fail(parsed.error, 400);
       }
 
-      const typedRequest = request as HandlerRequest & { body: S };
+      const typedRequest = request as Omit<HandlerRequest, 'body'> & {
+        body: S;
+      };
       (typedRequest as any).body = parsed.data;
       return handler({
         request: typedRequest,
