@@ -1,5 +1,6 @@
 import { getLogger } from '../utils/logger';
 
+import type { ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import {
   Handler,
@@ -165,9 +166,28 @@ const build = <Aux extends HandlerAuxBase>(
   plugins: Array<HandlerPluginBase<any>>,
 ) => {
   const middleware = new HandlerMiddleware<Aux>(plugins);
-  return (handler: Handler<Aux>) =>
-    (event: any, context: any, callback: any) => {
+  const invoke =
+    (handler: Handler<Aux>) => (event: any, context: any, callback: any) => {
       new HandlerProxy<Aux>(event, context, callback).call(middleware, handler);
     };
+
+  const safeInvoke = <S>(
+    schema: ZodSchema<S>,
+    handler: Handler<Aux & { schema: S }>,
+  ) =>
+    invoke(async ({ request, response, aux }) => {
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        response.fail(parsed.error);
+        return;
+      }
+      return handler({
+        request,
+        response,
+        aux: { ...aux, schema: parsed.data },
+      });
+    });
+  // return { invoke, invokeWithSchemaValidation };
+  return Object.assign(invoke, { safeInvoke });
 };
 export default build;

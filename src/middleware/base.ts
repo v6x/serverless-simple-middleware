@@ -88,7 +88,7 @@ export class HandlerResponse {
     if (this.crossOrigin) {
       headers['Access-Control-Allow-Origin'] = this.crossOrigin;
     }
-    let multiValueHeaders = undefined;
+    let multiValueHeaders: any = undefined;
     if (this.cookies.length > 0) {
       multiValueHeaders = { 'Set-Cookie': this.cookies };
     }
