@@ -178,7 +178,7 @@ const build = <Aux extends HandlerAuxBase>(
    *   returns `{ statusCode, body }`, that is sent instead of the default zod
    *   error payload.
    */
-  const invokeWithBody = <S>(
+  const withBody = <S>(
     schema: ZodSchema<S>,
     handler: (context: {
       request: Omit<HandlerRequest, 'body'> & { body: S };
@@ -225,7 +225,7 @@ const build = <Aux extends HandlerAuxBase>(
    *   returns `{ statusCode, body }`, that is sent instead of the default zod
    *   error payload.
    */
-  const invokeWithQuery = <Q>(
+  const withQuery = <Q>(
     schema: ZodSchema<Q>,
     handler: (context: {
       request: Omit<HandlerRequest, 'query'> & { query: Q };
@@ -266,8 +266,8 @@ const build = <Aux extends HandlerAuxBase>(
     });
 
   return Object.assign(invoke, {
-    invokeWithBody,
-    invokeWithQuery,
+    withBody,
+    withQuery,
   });
 };
 export default build;
