@@ -22,4 +22,8 @@ export class OncePromise<T> {
     }
     return this.promise;
   }
+
+  public reset(): void {
+    this.promise = undefined;
+  }
 }
