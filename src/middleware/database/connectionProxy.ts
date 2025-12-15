@@ -116,6 +116,7 @@ export class ConnectionProxy {
     if (this.connection) {
       this.connection.end();
       this.connection = undefined;
+      this.connectionInitOnce.reset();
       logger.verbose('Connection is end');
     }
   };
@@ -128,6 +129,7 @@ export class ConnectionProxy {
     if (this.connection) {
       this.connection.destroy();
       this.connection = undefined;
+      this.connectionInitOnce.reset();
       logger.verbose('Connection is destroyed');
     }
   };

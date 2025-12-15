@@ -86,6 +86,7 @@ class LazyConnectionPool implements MysqlPool {
     if (this.connection) {
       this.connection.end((err: QueryError) => {
         this.connection = null;
+        this.connectionInitOnce.reset();
         callback(err);
       });
     } else {
@@ -97,6 +98,7 @@ class LazyConnectionPool implements MysqlPool {
     if (this.connection) {
       this.connection.destroy();
       this.connection = null;
+      this.connectionInitOnce.reset();
     }
   };
 
