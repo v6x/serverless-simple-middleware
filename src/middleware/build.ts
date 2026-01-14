@@ -183,7 +183,7 @@ const build = <Aux extends HandlerAuxBase>(
     handler: (context: {
       request: Omit<HandlerRequest, 'body'> & { body: S };
       response: HandlerResponse;
-      aux: Aux & { schema: S };
+      aux: Aux;
     }) => any,
     onInvalid?: (
       error: ZodError,
@@ -214,7 +214,7 @@ const build = <Aux extends HandlerAuxBase>(
       return handler({
         request: typedRequest,
         response,
-        aux: { ...aux, schema: parsed.data },
+        aux,
       });
     });
 
