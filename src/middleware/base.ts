@@ -21,6 +21,13 @@ export class HandlerRequest {
     this.event = event;
     this.context = context;
     this.lastError = undefined;
+    const normalizedHeaders: Record<string, string | undefined> = {};
+    if (this.event.headers) {
+      for (const key of Object.keys(this.event.headers)) {
+        normalizedHeaders[key.toLowerCase()] = this.event.headers[key];
+      }
+    }
+    this.event.headers = normalizedHeaders;
   }
 
   get body() {
@@ -41,10 +48,8 @@ export class HandlerRequest {
     return this.event.queryStringParameters || {};
   }
 
-  public header(key: string) {
-    return this.event.headers
-      ? this.event.headers[key] || this.event.headers[key.toLowerCase()]
-      : undefined;
+  public header(key: string): string | undefined {
+    return this.event.headers[key.toLowerCase()];
   }
 
   public records<T, U>(selector?: (each: T) => U) {
