@@ -13,8 +13,11 @@ import {
   type QueryError,
 } from 'mysql2';
 import { OncePromise } from '../../internal/oncePromise';
+import { getLogger } from '../../utils';
 import { SecretsManagerCache } from '../../utils/secretsManager';
 import { MySQLPluginOptions } from '../mysql';
+
+const logger = getLogger(__filename);
 
 interface LazyMysqlPoolConnection extends Connection {
   release: () => void;
@@ -83,10 +86,12 @@ class LazyConnectionPool implements MysqlPool {
   };
 
   public end = (callback: (error: unknown) => void): void => {
-    if (this.connection) {
-      this.connection.end((err: QueryError) => {
-        this.connection = null;
-        this.connectionInitOnce.reset();
+    const conn = this.connection;
+    this.connection = null;
+    this.connectionInitOnce.reset();
+
+    if (conn) {
+      conn.end((err: QueryError) => {
         callback(err);
       });
     } else {
@@ -95,10 +100,16 @@ class LazyConnectionPool implements MysqlPool {
   };
 
   public destroy = (): void => {
-    if (this.connection) {
-      this.connection.destroy();
-      this.connection = null;
-      this.connectionInitOnce.reset();
+    const conn = this.connection;
+    this.connection = null;
+    this.connectionInitOnce.reset();
+
+    if (conn) {
+      try {
+        conn.destroy();
+      } catch (error) {
+        logger.warn(`Error occurred while destroying connection: ${error}`);
+      }
     }
   };
 
@@ -160,5 +171,6 @@ export {
   type Transaction,
   type Updateable,
   type UpdateQueryBuilder,
-  type UpdateResult,
+  type UpdateResult
 } from 'kysely';
+
