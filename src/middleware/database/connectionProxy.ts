@@ -29,6 +29,9 @@ export class ConnectionProxy {
       options.config.database = undefined;
     }
     this.secretsCache = SecretsManagerCache.getInstance();
+    if (options.secretsManagerConfig) {
+      this.secretsCache.configure(options.secretsManagerConfig);
+    }
   }
 
   public query = <T>(sql: string, params?: any[]) =>
