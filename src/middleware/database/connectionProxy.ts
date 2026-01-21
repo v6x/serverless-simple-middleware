@@ -32,31 +32,33 @@ export class ConnectionProxy {
   }
 
   public query = <T>(sql: string, params?: any[]) =>
-    new Promise<T | undefined>(async (resolve, reject) => {
-      const connection = await this.prepareConnection();
-      await this.tryToInitializeSchema(false);
-
-      if (process.env.NODE_ENV !== 'test') {
-        logger.silly(`Execute query[${sql}] with params[${params}]`);
-      }
-      connection.query(
-        sql,
-        params,
-        (err: QueryError, result: QueryResult, _fields?: FieldPacket[]) => {
-          if (err) {
-            logger.error(
-              `error occurred in database query=${sql}, error=${err}`,
-            );
-            reject(err);
-          } else {
-            resolve(result as T);
+    this.prepareConnection().then((connection) =>
+      this.tryToInitializeSchema(false).then(
+        () =>
+          new Promise<T | undefined>((resolve, reject) => {
             if (process.env.NODE_ENV !== 'test') {
-              logger.silly(`DB result is ${JSON.stringify(result)}`);
+              logger.silly(`Execute query[${sql}] with params[${params}]`);
             }
-          }
-        },
-      );
-    });
+            connection.query(
+              sql,
+              params,
+              (err: QueryError, result: QueryResult, _fields?: FieldPacket[]) => {
+                if (err) {
+                  logger.error(
+                    `error occurred in database query=${sql}, error=${err}`,
+                  );
+                  reject(err);
+                } else {
+                  resolve(result as T);
+                  if (process.env.NODE_ENV !== 'test') {
+                    logger.silly(`DB result is ${JSON.stringify(result)}`);
+                  }
+                }
+              },
+            );
+          }),
+      ),
+    );
 
   public fetch = <T>(sql: string, params?: any[]) =>
     this.query<T[]>(sql, params).then((res) => res || []);
@@ -71,46 +73,52 @@ export class ConnectionProxy {
     });
 
   public beginTransaction = () =>
-    new Promise<void>(async (resolve, reject) => {
-      const connection = await this.prepareConnection();
-      await this.tryToInitializeSchema(false);
-
-      connection.beginTransaction((err: QueryError) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
+    this.prepareConnection().then((connection) =>
+      this.tryToInitializeSchema(false).then(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            connection.beginTransaction((err: QueryError) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              resolve();
+            });
+          }),
+      ),
+    );
 
   public commit = () =>
-    new Promise<void>(async (resolve, reject) => {
-      const connection = await this.prepareConnection();
-      await this.tryToInitializeSchema(false);
-
-      connection.commit((err: QueryError) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
+    this.prepareConnection().then((connection) =>
+      this.tryToInitializeSchema(false).then(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            connection.commit((err: QueryError) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              resolve();
+            });
+          }),
+      ),
+    );
 
   public rollback = () =>
-    new Promise<void>(async (resolve, reject) => {
-      const connection = await this.prepareConnection();
-      await this.tryToInitializeSchema(false);
-
-      connection.rollback((err: QueryError) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
+    this.prepareConnection().then((connection) =>
+      this.tryToInitializeSchema(false).then(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            connection.rollback((err: QueryError) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              resolve();
+            });
+          }),
+      ),
+    );
 
   public clearConnection = () => {
     const conn = this.connection;
