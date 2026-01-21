@@ -32,6 +32,9 @@ class LazyConnectionPool implements MysqlPool {
 
   constructor(private readonly options: MySQLPluginOptions) {
     this.secretsCache = SecretsManagerCache.getInstance();
+    if (options.secretsManagerConfig) {
+      this.secretsCache.configure(options.secretsManagerConfig);
+    }
   }
 
   private ensureConnectionConfig = async (): Promise<void> => {
