@@ -1,4 +1,4 @@
 export { ConnectionProxy } from './connectionProxy';
-export { expressionBuilder, sql } from './sqlClient';
+export { expressionBuilder, sql, SQLClient } from './sqlClient';
 
 export type * from './sqlClient';
