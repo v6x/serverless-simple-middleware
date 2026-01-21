@@ -153,10 +153,42 @@ export class ConnectionProxy {
 
     return await this.connectionInitOnce.run(async () => {
       await this.ensureConnectionConfig();
-      const conn = createConnection(this.connectionConfig);
-      conn.connect();
-      this.connection = conn;
+      this.connection = await this.createConnection();
       return this.connection;
+    });
+  };
+
+  private createConnection = async (
+    retryCount = 0,
+  ): Promise<Connection> => {
+    const conn = createConnection(this.connectionConfig);
+
+    return new Promise((resolve, reject) => {
+      conn.on('error', (err) => {
+        logger.error(`Connection error event: ${err.message}`);
+      });
+
+      conn.connect((err) => {
+        if (err) {
+          logger.error(
+            `[Attempt ${retryCount + 1}] Failed to connect to database: ${err.message}`,
+          );
+          conn.destroy();
+
+          if (retryCount < 1) {
+            logger.warn('Retrying database connection...');
+            this.createConnection(retryCount + 1)
+              .then(resolve)
+              .catch(reject);
+          } else {
+            logger.error('Database connection failed after retry. Giving up.');
+            reject(err);
+          }
+        } else {
+          logger.verbose('Database connection established successfully.');
+          resolve(conn);
+        }
+      });
     });
   };
 

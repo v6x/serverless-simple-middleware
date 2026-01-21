@@ -68,21 +68,46 @@ class LazyConnectionPool implements MysqlPool {
     this.connectionInitOnce
       .run(async () => {
         await this.ensureConnectionConfig();
-        const conn = createConnection(this.connectionConfig);
-        return await new Promise<LazyMysqlPoolConnection>((resolve, reject) => {
-          conn.connect((err: QueryError) => {
-            if (err) {
-              reject(err);
-              return;
-            }
-            const wrapped = this._addRelease(conn);
-            this.connection = wrapped;
-            resolve(wrapped);
-          });
-        });
+        return await this.createConnection();
       })
       .then((conn) => callback(null, conn))
       .catch((err) => callback(err, {} as LazyMysqlPoolConnection));
+  };
+
+  private createConnection = async (
+    retryCount = 0,
+  ): Promise<LazyMysqlPoolConnection> => {
+    const conn = createConnection(this.connectionConfig);
+
+    return new Promise((resolve, reject) => {
+      conn.on('error', (err) => {
+        logger.error(`Database connection error occurred: ${err.message}`);
+      });
+
+      conn.connect((err: QueryError) => {
+        if (err) {
+          logger.error(
+            `[Attempt ${retryCount + 1}] Failed to connect to database: ${err.message}`,
+          );
+          conn.destroy();
+
+          if (retryCount < 1) {
+            logger.warn('Retrying database connection...');
+            this.createConnection(retryCount + 1)
+              .then(resolve)
+              .catch(reject);
+          } else {
+            logger.error('Database connection failed after retry. Giving up.');
+            reject(err);
+          }
+        } else {
+          logger.verbose('Database connection established successfully.');
+          const wrapped = this._addRelease(conn);
+          this.connection = wrapped;
+          resolve(wrapped);
+        }
+      });
+    });
   };
 
   public end = (callback: (error: unknown) => void): void => {
