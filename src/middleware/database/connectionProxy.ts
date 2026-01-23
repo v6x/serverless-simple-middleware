@@ -23,6 +23,8 @@ export class ConnectionProxy {
   private initialized: boolean;
   private dbName?: string;
 
+  private readonly MAX_RETRIES: number = 1;
+
   public constructor(private readonly options: MySQLPluginOptions) {
     if (options.schema && options.schema.database) {
       this.dbName = options.config.database;
@@ -161,13 +163,13 @@ export class ConnectionProxy {
 
     return await this.connectionInitOnce.run(async () => {
       await this.ensureConnectionConfig();
-      this.connection = await this.createConnection();
+      this.connection = await this.createConnection(this.MAX_RETRIES);
       return this.connection;
     });
   };
 
   private createConnection = async (
-    retryCount = 0,
+    remainingRetries: number,
   ): Promise<Connection> => {
     const conn = createConnection(this.connectionConfig);
 
@@ -178,18 +180,20 @@ export class ConnectionProxy {
 
       conn.connect((err) => {
         if (err) {
-          logger.error(
-            `[Attempt ${retryCount + 1}] Failed to connect to database: ${err.message}`,
-          );
+          logger.error(`Failed to connect to database: ${err.message}`);
           conn.destroy();
 
-          if (retryCount < 1) {
-            logger.warn('Retrying database connection...');
-            this.createConnection(retryCount + 1)
-              .then(resolve)
-              .catch(reject);
+          if (remainingRetries > 0) {
+            logger.warn(
+              `Retrying database connection... (${remainingRetries} attempt(s) remaining)`,
+            );
+            setTimeout(() => {
+              this.createConnection(remainingRetries - 1)
+                .then(resolve)
+                .catch(reject);
+            }, 100);
           } else {
-            logger.error('Database connection failed after retry. Giving up.');
+            logger.error('Database connection failed after all retries. Giving up.');
             reject(err);
           }
         } else {
