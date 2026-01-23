@@ -30,6 +30,8 @@ class LazyConnectionPool implements MysqlPool {
   private configInitOnce = new OncePromise<void>();
   private connectionInitOnce = new OncePromise<LazyMysqlPoolConnection>();
 
+  private readonly MAX_RETRIES: number = 1;
+
   constructor(private readonly options: MySQLPluginOptions) {
     this.secretsCache = SecretsManagerCache.getInstance();
   }
@@ -68,14 +70,14 @@ class LazyConnectionPool implements MysqlPool {
     this.connectionInitOnce
       .run(async () => {
         await this.ensureConnectionConfig();
-        return await this.createConnection();
+        return await this.createConnection(this.MAX_RETRIES);
       })
       .then((conn) => callback(null, conn))
       .catch((err) => callback(err, {} as LazyMysqlPoolConnection));
   };
 
   private createConnection = async (
-    retryCount = 0,
+    remainingRetries: number,
   ): Promise<LazyMysqlPoolConnection> => {
     const conn = createConnection(this.connectionConfig);
 
@@ -86,18 +88,20 @@ class LazyConnectionPool implements MysqlPool {
 
       conn.connect((err: QueryError) => {
         if (err) {
-          logger.error(
-            `[Attempt ${retryCount + 1}] Failed to connect to database: ${err.message}`,
-          );
+          logger.error(`Failed to connect to database: ${err.message}`);
           conn.destroy();
 
-          if (retryCount < 1) {
-            logger.warn('Retrying database connection...');
-            this.createConnection(retryCount + 1)
-              .then(resolve)
-              .catch(reject);
+          if (remainingRetries > 0) {
+            logger.warn(
+              `Retrying database connection... (${remainingRetries} attempt(s) remaining)`,
+            );
+            setTimeout(() => {
+              this.createConnection(remainingRetries - 1)
+                .then(resolve)
+                .catch(reject);
+            }, 100);
           } else {
-            logger.error('Database connection failed after retry. Giving up.');
+            logger.error('Database connection failed after all retries. Giving up.');
             reject(err);
           }
         } else {
