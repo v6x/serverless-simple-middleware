@@ -30,6 +30,8 @@ class LazyConnectionPool implements MysqlPool {
   private configInitOnce = new OncePromise<void>();
   private connectionInitOnce = new OncePromise<LazyMysqlPoolConnection>();
 
+  private readonly MAX_RETRIES: number = 1;
+
   constructor(private readonly options: MySQLPluginOptions) {
     this.secretsCache = SecretsManagerCache.getInstance();
     if (options.secretsManagerConfig) {
@@ -71,21 +73,48 @@ class LazyConnectionPool implements MysqlPool {
     this.connectionInitOnce
       .run(async () => {
         await this.ensureConnectionConfig();
-        const conn = createConnection(this.connectionConfig);
-        return await new Promise<LazyMysqlPoolConnection>((resolve, reject) => {
-          conn.connect((err: QueryError) => {
-            if (err) {
-              reject(err);
-              return;
-            }
-            const wrapped = this._addRelease(conn);
-            this.connection = wrapped;
-            resolve(wrapped);
-          });
-        });
+        return await this.createConnection(this.MAX_RETRIES);
       })
       .then((conn) => callback(null, conn))
       .catch((err) => callback(err, {} as LazyMysqlPoolConnection));
+  };
+
+  private createConnection = async (
+    remainingRetries: number,
+  ): Promise<LazyMysqlPoolConnection> => {
+    const conn = createConnection(this.connectionConfig);
+
+    return new Promise((resolve, reject) => {
+      conn.on('error', (err) => {
+        logger.error(`Database connection error occurred: ${err.message}`);
+      });
+
+      conn.connect((err: QueryError) => {
+        if (err) {
+          logger.error(`Failed to connect to database: ${err.message}`);
+          conn.destroy();
+
+          if (remainingRetries > 0) {
+            logger.warn(
+              `Retrying database connection... (${remainingRetries} attempt(s) remaining)`,
+            );
+            setTimeout(() => {
+              this.createConnection(remainingRetries - 1)
+                .then(resolve)
+                .catch(reject);
+            }, 100);
+          } else {
+            logger.error('Database connection failed after all retries. Giving up.');
+            reject(err);
+          }
+        } else {
+          logger.verbose('Database connection established successfully.');
+          const wrapped = this._addRelease(conn);
+          this.connection = wrapped;
+          resolve(wrapped);
+        }
+      });
+    });
   };
 
   public end = (callback: (error: unknown) => void): void => {
