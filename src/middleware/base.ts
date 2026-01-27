@@ -40,12 +40,20 @@ export class HandlerRequest {
     return this.lazyBody || {};
   }
 
+  set body(value: any) {
+    this.lazyBody = value;
+  }
+
   get path(): { [key: string]: string | undefined } {
     return this.event.pathParameters || {};
   }
 
   get query(): { [key: string]: string | undefined } {
     return this.event.queryStringParameters || {};
+  }
+
+  set query(value: { [key: string]: any }) {
+    this.event.queryStringParameters = value;
   }
 
   public header(key: string): string | undefined {
@@ -93,7 +101,7 @@ export class HandlerResponse {
     if (this.crossOrigin) {
       headers['Access-Control-Allow-Origin'] = this.crossOrigin;
     }
-    let multiValueHeaders = undefined;
+    let multiValueHeaders: any = undefined;
     if (this.cookies.length > 0) {
       multiValueHeaders = { 'Set-Cookie': this.cookies };
     }
