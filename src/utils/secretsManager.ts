@@ -1,6 +1,7 @@
 import {
   GetSecretValueCommand,
   SecretsManagerClient,
+  SecretsManagerClientConfig,
 } from '@aws-sdk/client-secrets-manager';
 import type { DatabaseCredentials } from '../middleware/mysql';
 import { getLogger } from './logger';
@@ -11,6 +12,7 @@ const logger = getLogger(__filename);
 export class SecretsManagerCache {
   private static instance: SecretsManagerCache;
   private client: SecretsManagerClient | undefined;
+  private clientConfig: SecretsManagerClientConfig | undefined;
   private cache = new Map<string, any>();
 
   private constructor() {}
@@ -22,9 +24,20 @@ export class SecretsManagerCache {
     return SecretsManagerCache.instance;
   }
 
+  public configure(config: SecretsManagerClientConfig): void {
+    if (this.client) {
+      logger.warn(
+        'SecretsManager client already initialized. Reconfiguring with new config.',
+      );
+      this.client = undefined;
+    }
+    this.clientConfig = config;
+    logger.debug('SecretsManager client config updated');
+  }
+
   private getClient(): SecretsManagerClient {
     if (!this.client) {
-      this.client = new SecretsManagerClient({});
+      this.client = new SecretsManagerClient(this.clientConfig ?? {});
       logger.debug('SecretsManager client initialized');
     }
     return this.client;

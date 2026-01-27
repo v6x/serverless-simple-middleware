@@ -29,6 +29,9 @@ export class ConnectionProxy {
       options.config.database = undefined;
     }
     this.secretsCache = SecretsManagerCache.getInstance();
+    if (options.secretsManagerConfig) {
+      this.secretsCache.configure(options.secretsManagerConfig);
+    }
   }
 
   public query = <T>(sql: string, params?: any[]) =>
@@ -113,11 +116,16 @@ export class ConnectionProxy {
     });
 
   public clearConnection = () => {
-    if (this.connection) {
-      this.connection.end();
-      this.connection = undefined;
-      this.connectionInitOnce.reset();
-      logger.verbose('Connection is end');
+    const conn = this.connection;
+    this.connection = undefined;
+    this.connectionInitOnce.reset();
+
+    if (conn) {
+      try {
+        conn.end();
+      } catch (error) {
+        logger.warn(`Error occurred while ending connection: ${error}`);
+      }
     }
   };
 
@@ -126,11 +134,16 @@ export class ConnectionProxy {
    * This should be used only for special use cases!
    */
   public destroyConnection = () => {
-    if (this.connection) {
-      this.connection.destroy();
-      this.connection = undefined;
-      this.connectionInitOnce.reset();
-      logger.verbose('Connection is destroyed');
+    const conn = this.connection;
+    this.connection = undefined;
+    this.connectionInitOnce.reset();
+
+    if (conn) {
+      try {
+        conn.destroy();
+      } catch (error) {
+        logger.warn(`Error occurred while destroying connection: ${error}`);
+      }
     }
   };
 
