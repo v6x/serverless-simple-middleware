@@ -10,4 +10,4 @@ export declare class SQLClient<T = unknown> extends Kysely<T> {
      */
     destroyConnection: () => void;
 }
-export { expressionBuilder, sql, type DeleteQueryBuilder, type DeleteResult, type Expression, type ExpressionBuilder, type InferResult, type Insertable, type InsertQueryBuilder, type InsertResult, type NotNull, type RawBuilder, type Selectable, type SelectQueryBuilder, type SqlBool, type Transaction, type Updateable, type UpdateQueryBuilder, type UpdateResult, } from 'kysely';
+export { expressionBuilder, sql, type DeleteQueryBuilder, type DeleteResult, type Expression, type ExpressionBuilder, type InferResult, type Insertable, type InsertQueryBuilder, type InsertResult, type NotNull, type RawBuilder, type Selectable, type SelectQueryBuilder, type SqlBool, type Transaction, type Updateable, type UpdateQueryBuilder, type UpdateResult } from 'kysely';

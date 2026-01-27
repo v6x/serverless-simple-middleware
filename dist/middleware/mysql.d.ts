@@ -1,3 +1,4 @@
+import type { SecretsManagerClientConfig } from '@aws-sdk/client-secrets-manager';
 import type { ConnectionOptions, PoolOptions } from 'mysql2';
 import { HandlerAuxBase, HandlerPluginBase } from './base';
 import { ConnectionProxy } from './database/connectionProxy';
@@ -12,6 +13,7 @@ export interface MySQLPluginOptions {
      * AWS Secrets Manager secret ID containing {@link DatabaseCredentials}
      */
     secretId?: string;
+    secretsManagerConfig?: SecretsManagerClientConfig;
     schema?: {
         eager?: boolean;
         ignoreError?: boolean;

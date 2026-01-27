@@ -4,7 +4,9 @@ exports.sql = exports.expressionBuilder = exports.SQLClient = void 0;
 const kysely_1 = require("kysely");
 const mysql2_1 = require("mysql2");
 const oncePromise_1 = require("../../internal/oncePromise");
+const utils_1 = require("../../utils");
 const secretsManager_1 = require("../../utils/secretsManager");
+const logger = (0, utils_1.getLogger)(__filename);
 class LazyConnectionPool {
     options;
     connection = null;
@@ -15,6 +17,9 @@ class LazyConnectionPool {
     constructor(options) {
         this.options = options;
         this.secretsCache = secretsManager_1.SecretsManagerCache.getInstance();
+        if (options.secretsManagerConfig) {
+            this.secretsCache.configure(options.secretsManagerConfig);
+        }
     }
     ensureConnectionConfig = async () => {
         if (this.connectionConfig) {
@@ -59,10 +64,11 @@ class LazyConnectionPool {
             .catch((err) => callback(err, {}));
     };
     end = (callback) => {
-        if (this.connection) {
-            this.connection.end((err) => {
-                this.connection = null;
-                this.connectionInitOnce.reset();
+        const conn = this.connection;
+        this.connection = null;
+        this.connectionInitOnce.reset();
+        if (conn) {
+            conn.end((err) => {
                 callback(err);
             });
         }
@@ -71,10 +77,16 @@ class LazyConnectionPool {
         }
     };
     destroy = () => {
-        if (this.connection) {
-            this.connection.destroy();
-            this.connection = null;
-            this.connectionInitOnce.reset();
+        const conn = this.connection;
+        this.connection = null;
+        this.connectionInitOnce.reset();
+        if (conn) {
+            try {
+                conn.destroy();
+            }
+            catch (error) {
+                logger.warn(`Error occurred while destroying connection: ${error}`);
+            }
         }
     };
     _addRelease = (connection) => Object.assign(connection, {

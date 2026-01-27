@@ -22,6 +22,9 @@ class ConnectionProxy {
             options.config.database = undefined;
         }
         this.secretsCache = secretsManager_1.SecretsManagerCache.getInstance();
+        if (options.secretsManagerConfig) {
+            this.secretsCache.configure(options.secretsManagerConfig);
+        }
     }
     query = (sql, params) => new Promise(async (resolve, reject) => {
         const connection = await this.prepareConnection();
@@ -84,11 +87,16 @@ class ConnectionProxy {
         });
     });
     clearConnection = () => {
-        if (this.connection) {
-            this.connection.end();
-            this.connection = undefined;
-            this.connectionInitOnce.reset();
-            logger.verbose('Connection is end');
+        const conn = this.connection;
+        this.connection = undefined;
+        this.connectionInitOnce.reset();
+        if (conn) {
+            try {
+                conn.end();
+            }
+            catch (error) {
+                logger.warn(`Error occurred while ending connection: ${error}`);
+            }
         }
     };
     /**
@@ -96,11 +104,16 @@ class ConnectionProxy {
      * This should be used only for special use cases!
      */
     destroyConnection = () => {
-        if (this.connection) {
-            this.connection.destroy();
-            this.connection = undefined;
-            this.connectionInitOnce.reset();
-            logger.verbose('Connection is destroyed');
+        const conn = this.connection;
+        this.connection = undefined;
+        this.connectionInitOnce.reset();
+        if (conn) {
+            try {
+                conn.destroy();
+            }
+            catch (error) {
+                logger.warn(`Error occurred while destroying connection: ${error}`);
+            }
         }
     };
     onPluginCreated = async () => this.tryToInitializeSchema(true);
