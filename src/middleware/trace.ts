@@ -68,6 +68,7 @@ export class Tracer {
     this.queueName = queueName;
     this.sqs = sqs;
     this.buffer = [];
+    logger.verbose(`[DEBUG] Tracer constructor: queueName=${queueName}`);
   }
 
   public push = (log: TracerLog) => this.buffer.push(log);
@@ -79,11 +80,35 @@ export class Tracer {
       return;
     }
     try {
+      // SQS 클라이언트 config 출력
+      const sqsConfig = await this.sqs.config.region();
+      const endpoint = await this.sqs.config.endpoint?.();
+      const credentials = await this.sqs.config.credentials?.();
+      logger.verbose(`[DEBUG] Tracer.flush() SQS client config: region=${sqsConfig}, endpoint=${JSON.stringify(endpoint)}, hasCredentials=${!!credentials}, accessKeyId=${credentials?.accessKeyId?.substring(0, 8)}...`);
+
       logger.verbose(`[DEBUG] Tracer.flush() calling sqs.getQueueUrl for queue: ${this.queueName}`);
+
+      // 5초 timeout으로 테스트
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        logger.warn('[DEBUG] Tracer.flush() sqs.getQueueUrl timeout after 5s, aborting...');
+        abortController.abort();
+      }, 5000);
+
       const getQueueUrlStart = Date.now();
-      const urlResult = await this.sqs.getQueueUrl({
-        QueueName: this.queueName,
-      });
+      logger.verbose(`[DEBUG] Tracer.flush() getQueueUrl request starting at ${new Date().toISOString()}`);
+
+      let urlResult;
+      try {
+        urlResult = await this.sqs.getQueueUrl({
+          QueueName: this.queueName,
+        }, {
+          abortSignal: abortController.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
       logger.verbose(`[DEBUG] Tracer.flush() sqs.getQueueUrl completed in ${Date.now() - getQueueUrlStart}ms`);
       logger.stupid(`urlResult`, urlResult);
       if (!urlResult.QueueUrl) {
@@ -200,16 +225,22 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
   }
 
   public create = async () => {
+    logger.verbose(`[DEBUG] TracerPlugin.create() called, options: queueName=${this.options.queueName}, region=${this.options.region}`);
+
     const awsConfig = this.options.awsConfig
       ? await loadAWSConfig(this.options.awsConfig)
       : undefined;
 
+    logger.verbose(`[DEBUG] TracerPlugin.create() awsConfig loaded: ${awsConfig ? 'yes' : 'no (using default)'}`);
+
     const sqs = (() => {
       if (!awsConfig) {
+        logger.verbose(`[DEBUG] TracerPlugin.create() creating SQS client with region=${this.options.region}`);
         return new SQS({
           region: this.options.region,
         });
       }
+      logger.verbose('[DEBUG] TracerPlugin.create() creating SQS client from SimpleAWS');
       $enum(AWSComponent).forEach((eachComponent) => {
         const config = awsConfig.get(eachComponent);
         if (config) {
@@ -219,6 +250,7 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
       return new SimpleAWS(awsConfig).sqs;
     })();
 
+    logger.verbose('[DEBUG] TracerPlugin.create() SQS client created, creating Tracer...');
     this.tracer = new Tracer(this.options.queueName, sqs);
     const tracer = (key: string, action: string) => {
       this.last = { key, action };
