@@ -82,11 +82,9 @@ class LazyConnectionPool implements MysqlPool {
   private createConnection = async (
     remainingRetries: number,
   ): Promise<LazyMysqlPoolConnection> => {
-    logger.verbose(`[DEBUG] LazyConnectionPool.createConnection called, remainingRetries=${remainingRetries}`);
     const conn = createConnection(this.connectionConfig);
 
     return new Promise((resolve, reject) => {
-      logger.verbose('[DEBUG] LazyConnectionPool: Registering conn.on("error") listener...');
       conn.on('error', (err) => {
         logger.error(`Database connection error occurred: ${err.message}`);
       });
@@ -94,16 +92,13 @@ class LazyConnectionPool implements MysqlPool {
       conn.connect((err: QueryError) => {
         if (err) {
           logger.error(`Failed to connect to database: ${err.message}`);
-          logger.verbose('[DEBUG] LazyConnectionPool: Destroying failed connection...');
           conn.destroy();
 
           if (remainingRetries > 0) {
             logger.warn(
               `Retrying database connection... (${remainingRetries} attempt(s) remaining)`,
             );
-            logger.verbose('[DEBUG] LazyConnectionPool: Setting setTimeout for retry...');
             setTimeout(() => {
-              logger.verbose('[DEBUG] LazyConnectionPool: setTimeout fired, retrying...');
               this.createConnection(remainingRetries - 1)
                 .then(resolve)
                 .catch(reject);
@@ -114,7 +109,6 @@ class LazyConnectionPool implements MysqlPool {
           }
         } else {
           logger.verbose('Database connection established successfully.');
-          logger.verbose(`[DEBUG] LazyConnectionPool: Connection threadId=${conn.threadId}`);
           const wrapped = this._addRelease(conn);
           this.connection = wrapped;
           resolve(wrapped);
@@ -124,23 +118,15 @@ class LazyConnectionPool implements MysqlPool {
   };
 
   public end = (callback: (error: unknown) => void): void => {
-    logger.verbose('[DEBUG] LazyConnectionPool.end() called');
     const conn = this.connection;
     this.connection = null;
     this.connectionInitOnce.reset();
 
     if (conn) {
-      logger.verbose('[DEBUG] Calling conn.end() on LazyConnectionPool...');
       conn.end((err: QueryError) => {
-        if (err) {
-          logger.warn(`[DEBUG] LazyConnectionPool conn.end() error: ${err}`);
-        } else {
-          logger.verbose('[DEBUG] LazyConnectionPool conn.end() success');
-        }
         callback(err);
       });
     } else {
-      logger.verbose('[DEBUG] No connection to end in LazyConnectionPool');
       callback(null);
     }
   };
@@ -186,15 +172,7 @@ export class SQLClient<T = unknown> extends Kysely<T> {
 
   public clearConnection = () =>
     new Promise<void>((resolve) => {
-      logger.verbose('[DEBUG] SQLClient.clearConnection() called, calling pool.end()...');
-      this.pool.end((err) => {
-        if (err) {
-          logger.warn(`[DEBUG] SQLClient pool.end() error: ${err}`);
-        } else {
-          logger.verbose('[DEBUG] SQLClient pool.end() completed');
-        }
-        resolve();
-      });
+      this.pool.end(() => resolve());
     });
 
   /**
@@ -227,4 +205,3 @@ export {
   type UpdateQueryBuilder,
   type UpdateResult
 } from 'kysely';
-
