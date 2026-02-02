@@ -88,10 +88,22 @@ class HandlerProxy<A extends HandlerAuxBase> {
         ),
       );
 
+    logger.verbose('[DEBUG] Starting beginHandlers...');
+    const beginResults = await iterate(beginHandlers);
+    logger.verbose('[DEBUG] beginHandlers finished');
+
+    logger.verbose('[DEBUG] Starting actualHandler...');
+    const actualResults = await iterate(actualHandler, true);
+    logger.verbose('[DEBUG] actualHandler finished');
+
+    logger.verbose('[DEBUG] Starting endHandlers...');
+    const endResults = await iterate(endHandlers);
+    logger.verbose('[DEBUG] endHandlers finished');
+
     const results = [
-      ...(await iterate(beginHandlers)),
-      ...(await iterate(actualHandler, true)),
-      ...(await iterate(endHandlers)),
+      ...beginResults,
+      ...actualResults,
+      ...endResults,
     ].filter((x) => x);
     // In test phase, throws any exception if there was.
     if (process.env.NODE_ENV === 'test') {
