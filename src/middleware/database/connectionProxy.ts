@@ -126,26 +126,16 @@ export class ConnectionProxy {
     );
 
   public clearConnection = () => {
-    logger.verbose('[DEBUG] clearConnection called');
     const conn = this.connection;
     this.connection = undefined;
     this.connectionInitOnce.reset();
 
     if (conn) {
       try {
-        logger.verbose('[DEBUG] Calling conn.end()...');
-        conn.end((err) => {
-          if (err) {
-            logger.warn(`[DEBUG] conn.end() callback error: ${err}`);
-          } else {
-            logger.verbose('[DEBUG] conn.end() callback success');
-          }
-        });
+        conn.end();
       } catch (error) {
         logger.warn(`Error occurred while ending connection: ${error}`);
       }
-    } else {
-      logger.verbose('[DEBUG] No connection to clear');
     }
   };
 
@@ -184,11 +174,9 @@ export class ConnectionProxy {
   private createConnection = async (
     remainingRetries: number,
   ): Promise<Connection> => {
-    logger.verbose(`[DEBUG] createConnection called, remainingRetries=${remainingRetries}`);
     const conn = createConnection(this.connectionConfig);
 
     return new Promise((resolve, reject) => {
-      logger.verbose('[DEBUG] Registering conn.on("error") listener...');
       conn.on('error', (err) => {
         logger.error(`Connection error event: ${err.message}`);
       });
@@ -196,16 +184,13 @@ export class ConnectionProxy {
       conn.connect((err) => {
         if (err) {
           logger.error(`Failed to connect to database: ${err.message}`);
-          logger.verbose('[DEBUG] Destroying failed connection...');
           conn.destroy();
 
           if (remainingRetries > 0) {
             logger.warn(
               `Retrying database connection... (${remainingRetries} attempt(s) remaining)`,
             );
-            logger.verbose('[DEBUG] Setting setTimeout for retry...');
             setTimeout(() => {
-              logger.verbose('[DEBUG] setTimeout fired, retrying...');
               this.createConnection(remainingRetries - 1)
                 .then(resolve)
                 .catch(reject);
@@ -216,7 +201,6 @@ export class ConnectionProxy {
           }
         } else {
           logger.verbose('Database connection established successfully.');
-          logger.verbose(`[DEBUG] Connection state: threadId=${conn.threadId}`);
           resolve(conn);
         }
       });

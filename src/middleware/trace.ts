@@ -9,9 +9,111 @@ import { getLogger, stringifyError } from '../utils';
 
 import { SQS } from '@aws-sdk/client-sqs';
 import { $enum } from 'ts-enum-util';
+import * as v8 from 'v8';
 import { HandlerAuxBase, HandlerContext, HandlerPluginBase } from './base';
 
 const logger = getLogger(__filename);
+
+// ============================================================
+// Memory Debugging Utilities
+// ============================================================
+
+interface MemorySnapshot {
+  timestamp: string;
+  label: string;
+  process: {
+    rss: number;          // Resident Set Size - 전체 프로세스 메모리
+    heapTotal: number;    // V8이 예약한 힙 크기
+    heapUsed: number;     // V8이 실제 사용 중인 힙
+    external: number;     // V8 외부 C++ 객체 (Buffer 등)
+    arrayBuffers: number; // ArrayBuffer, SharedArrayBuffer 메모리
+  };
+  v8Heap: {
+    totalHeapSize: number;
+    totalHeapSizeExecutable: number;
+    totalPhysicalSize: number;
+    totalAvailableSize: number;
+    usedHeapSize: number;
+    heapSizeLimit: number;
+    mallocedMemory: number;
+    peakMallocedMemory: number;
+    externalMemory: number;
+  };
+  heapSpaces: Array<{
+    name: string;
+    size: number;
+    used: number;
+    available: number;
+    physicalSize: number;
+  }>;
+}
+
+const captureMemorySnapshot = (label: string): MemorySnapshot => {
+  const mem = process.memoryUsage();
+  const heapStats = v8.getHeapStatistics();
+  const heapSpaces = v8.getHeapSpaceStatistics();
+
+  return {
+    timestamp: new Date().toISOString(),
+    label,
+    process: {
+      rss: Math.round(mem.rss / 1024 / 1024 * 100) / 100,
+      heapTotal: Math.round(mem.heapTotal / 1024 / 1024 * 100) / 100,
+      heapUsed: Math.round(mem.heapUsed / 1024 / 1024 * 100) / 100,
+      external: Math.round(mem.external / 1024 / 1024 * 100) / 100,
+      arrayBuffers: Math.round(mem.arrayBuffers / 1024 / 1024 * 100) / 100,
+    },
+    v8Heap: {
+      totalHeapSize: Math.round(heapStats.total_heap_size / 1024 / 1024 * 100) / 100,
+      totalHeapSizeExecutable: Math.round(heapStats.total_heap_size_executable / 1024 / 1024 * 100) / 100,
+      totalPhysicalSize: Math.round(heapStats.total_physical_size / 1024 / 1024 * 100) / 100,
+      totalAvailableSize: Math.round(heapStats.total_available_size / 1024 / 1024 * 100) / 100,
+      usedHeapSize: Math.round(heapStats.used_heap_size / 1024 / 1024 * 100) / 100,
+      heapSizeLimit: Math.round(heapStats.heap_size_limit / 1024 / 1024 * 100) / 100,
+      mallocedMemory: Math.round(heapStats.malloced_memory / 1024 / 1024 * 100) / 100,
+      peakMallocedMemory: Math.round(heapStats.peak_malloced_memory / 1024 / 1024 * 100) / 100,
+      externalMemory: Math.round(heapStats.external_memory / 1024 / 1024 * 100) / 100,
+    },
+    heapSpaces: heapSpaces.map(space => ({
+      name: space.space_name,
+      size: Math.round(space.space_size / 1024 / 1024 * 100) / 100,
+      used: Math.round(space.space_used_size / 1024 / 1024 * 100) / 100,
+      available: Math.round(space.space_available_size / 1024 / 1024 * 100) / 100,
+      physicalSize: Math.round(space.physical_space_size / 1024 / 1024 * 100) / 100,
+    })),
+  };
+};
+
+const logMemorySnapshot = (snapshot: MemorySnapshot): void => {
+  console.log(`\n[MEMORY:${snapshot.label}] ${snapshot.timestamp}`);
+  console.log(`  Process: rss=${snapshot.process.rss}MB, heapTotal=${snapshot.process.heapTotal}MB, heapUsed=${snapshot.process.heapUsed}MB, external=${snapshot.process.external}MB, arrayBuffers=${snapshot.process.arrayBuffers}MB`);
+  console.log(`  V8 Heap: used=${snapshot.v8Heap.usedHeapSize}MB, total=${snapshot.v8Heap.totalHeapSize}MB, limit=${snapshot.v8Heap.heapSizeLimit}MB, available=${snapshot.v8Heap.totalAvailableSize}MB`);
+  console.log(`  V8 Native: malloced=${snapshot.v8Heap.mallocedMemory}MB, peakMalloced=${snapshot.v8Heap.peakMallocedMemory}MB, external=${snapshot.v8Heap.externalMemory}MB`);
+
+  // Heap spaces 중 의미있는 것만 출력
+  const significantSpaces = snapshot.heapSpaces.filter(s => s.used > 0.1);
+  if (significantSpaces.length > 0) {
+    console.log(`  Heap Spaces:`);
+    significantSpaces.forEach(space => {
+      console.log(`    ${space.name}: used=${space.used}MB, size=${space.size}MB, available=${space.available}MB`);
+    });
+  }
+};
+
+const compareMemorySnapshots = (before: MemorySnapshot, after: MemorySnapshot): void => {
+  const diff = (a: number, b: number) => {
+    const d = Math.round((b - a) * 100) / 100;
+    return d >= 0 ? `+${d}` : `${d}`;
+  };
+
+  console.log(`\n[MEMORY:DIFF] ${before.label} -> ${after.label}`);
+  console.log(`  Process: rss=${diff(before.process.rss, after.process.rss)}MB, heapTotal=${diff(before.process.heapTotal, after.process.heapTotal)}MB, heapUsed=${diff(before.process.heapUsed, after.process.heapUsed)}MB, external=${diff(before.process.external, after.process.external)}MB`);
+  console.log(`  V8 Native: malloced=${diff(before.v8Heap.mallocedMemory, after.v8Heap.mallocedMemory)}MB, external=${diff(before.v8Heap.externalMemory, after.v8Heap.externalMemory)}MB`);
+};
+
+// ============================================================
+// Tracer Implementation
+// ============================================================
 
 interface ITracerLog {
   uuid: string;
@@ -63,101 +165,57 @@ export class Tracer {
   private queueName: string;
   private sqs: SQS;
   private buffer: TracerLog[];
+  private debugMemory: boolean;
 
-  constructor(queueName: string, sqs: SQS) {
+  constructor(queueName: string, sqs: SQS, debugMemory: boolean = false) {
     this.queueName = queueName;
     this.sqs = sqs;
     this.buffer = [];
-    logger.verbose(`[DEBUG] Tracer constructor: queueName=${queueName}`);
+    this.debugMemory = debugMemory;
   }
 
   public push = (log: TracerLog) => this.buffer.push(log);
 
   public flush = async () => {
-    // 메모리 상태 로깅 헬퍼
-    const logMemory = (label: string) => {
-      const mem = process.memoryUsage();
-      console.log(`[MEMORY] ${label}: heapUsed=${Math.round(mem.heapUsed / 1024 / 1024)}MB, heapTotal=${Math.round(mem.heapTotal / 1024 / 1024)}MB, rss=${Math.round(mem.rss / 1024 / 1024)}MB, external=${Math.round(mem.external / 1024 / 1024)}MB`);
+    const snapshots: MemorySnapshot[] = [];
+    const capture = (label: string) => {
+      if (!this.debugMemory) return;
+      const snapshot = captureMemorySnapshot(label);
+      logMemorySnapshot(snapshot);
+      snapshots.push(snapshot);
     };
 
-    // 1초마다 heartbeat (이벤트 루프 동작 확인)
-    let heartbeatCount = 0;
-    const heartbeatInterval = setInterval(() => {
-      heartbeatCount++;
-      console.log(`[HEARTBEAT] #${heartbeatCount} at ${new Date().toISOString()}`);
-      logMemory(`heartbeat-${heartbeatCount}`);
-    }, 1000);
-
-    logger.verbose(`[DEBUG] Tracer.flush() called, buffer.length=${this.buffer.length}`);
-    logMemory('flush-start');
+    capture('flush:start');
 
     if (this.buffer.length === 0) {
-      clearInterval(heartbeatInterval);
-      logger.verbose('[DEBUG] Tracer.flush() buffer is empty, returning early');
       return;
     }
 
     try {
-      // SQS 클라이언트 config 출력
-      logMemory('before-credentials');
-      console.log(`[TIMING] before credentials: ${new Date().toISOString()}`);
-      const sqsConfig = await this.sqs.config.region();
-      console.log(`[TIMING] after region: ${new Date().toISOString()}`);
-      const endpoint = await this.sqs.config.endpoint?.();
-      console.log(`[TIMING] after endpoint: ${new Date().toISOString()}`);
-      const credentials = await this.sqs.config.credentials?.();
-      console.log(`[TIMING] after credentials: ${new Date().toISOString()}`);
-      logMemory('after-credentials');
-      logger.verbose(`[DEBUG] Tracer.flush() SQS client config: region=${sqsConfig}, endpoint=${JSON.stringify(endpoint)}, hasCredentials=${!!credentials}, accessKeyId=${credentials?.accessKeyId?.substring(0, 8)}...`);
+      capture('flush:before-getQueueUrl');
 
-      logger.verbose(`[DEBUG] Tracer.flush() calling sqs.getQueueUrl for queue: ${this.queueName}`);
-      logMemory('before-getQueueUrl');
+      const urlResult = await this.sqs.getQueueUrl({
+        QueueName: this.queueName,
+      });
 
-      // 5초 timeout으로 테스트
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.log(`[TIMEOUT] setTimeout callback fired at ${new Date().toISOString()}`);
-        logMemory('timeout-callback');
-        logger.warn('[DEBUG] Tracer.flush() sqs.getQueueUrl timeout after 5s, aborting...');
-        abortController.abort();
-        console.log(`[TIMEOUT] abort() called at ${new Date().toISOString()}`);
-      }, 5000);
+      capture('flush:after-getQueueUrl');
 
-      const getQueueUrlStart = Date.now();
-      console.log(`[TIMING] getQueueUrl request starting at ${new Date().toISOString()}`);
-
-      let urlResult;
-      try {
-        urlResult = await this.sqs.getQueueUrl({
-          QueueName: this.queueName,
-        }, {
-          abortSignal: abortController.signal,
-        });
-        console.log(`[TIMING] getQueueUrl completed at ${new Date().toISOString()}`);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      logger.verbose(`[DEBUG] Tracer.flush() sqs.getQueueUrl completed in ${Date.now() - getQueueUrlStart}ms`);
-      logMemory('after-getQueueUrl');
       logger.stupid(`urlResult`, urlResult);
       if (!urlResult.QueueUrl) {
         throw new Error(`No queue url with name[${this.queueName}]`);
       }
       const eventQueueUrl = urlResult.QueueUrl;
-      logger.verbose(`[DEBUG] Tracer.flush() got queue URL: ${eventQueueUrl}`);
 
       const chunkSize = 10;
       const totalChunks = Math.ceil(this.buffer.length / chunkSize);
-      logger.verbose(`[DEBUG] Tracer.flush() sending ${this.buffer.length} messages in ${totalChunks} chunk(s)`);
 
       for (let begin = 0; begin < this.buffer.length; begin += chunkSize) {
         const chunkIndex = Math.floor(begin / chunkSize) + 1;
         const end = Math.min(this.buffer.length, begin + chunkSize);
         const subset = this.buffer.slice(begin, end);
 
-        logger.verbose(`[DEBUG] Tracer.flush() sending chunk ${chunkIndex}/${totalChunks} (${subset.length} messages)`);
-        const sendBatchStart = Date.now();
+        capture(`flush:before-sendBatch-${chunkIndex}/${totalChunks}`);
+
         const sendBatchResult = await this.sqs.sendMessageBatch({
           QueueUrl: eventQueueUrl,
           Entries: subset.map((each) => ({
@@ -165,20 +223,22 @@ export class Tracer {
             MessageBody: JSON.stringify(each),
           })),
         });
-        logger.verbose(`[DEBUG] Tracer.flush() chunk ${chunkIndex}/${totalChunks} sent in ${Date.now() - sendBatchStart}ms`);
+
+        capture(`flush:after-sendBatch-${chunkIndex}/${totalChunks}`);
+
         logger.stupid(`sendBatchResult`, sendBatchResult);
       }
 
       this.buffer = [];
-      logger.verbose('[DEBUG] Tracer.flush() completed successfully');
+      capture('flush:complete');
+
+      // 전체 메모리 변화 요약
+      if (this.debugMemory && snapshots.length >= 2) {
+        compareMemorySnapshots(snapshots[0], snapshots[snapshots.length - 1]);
+      }
     } catch (error) {
-      console.log(`[ERROR] flush error at ${new Date().toISOString()}: ${stringifyError(error)}`);
-      logMemory('error');
-      logger.warn(`[DEBUG] Tracer.flush() error: ${stringifyError(error)}`);
+      capture('flush:error');
       logger.warn(`Error in eventSource: ${error}`);
-    } finally {
-      clearInterval(heartbeatInterval);
-      console.log(`[TIMING] flush finally block at ${new Date().toISOString()}, heartbeatCount=${heartbeatCount}`);
     }
   };
 }
@@ -234,6 +294,7 @@ export interface TracerPluginOptions {
 
   awsConfig?: SimpleAWSConfigLoadParam;
   region?: string;
+  debugMemory?: boolean;
 }
 
 export interface TracerPluginAux extends HandlerAuxBase {
@@ -260,22 +321,16 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
   }
 
   public create = async () => {
-    logger.verbose(`[DEBUG] TracerPlugin.create() called, options: queueName=${this.options.queueName}, region=${this.options.region}`);
-
     const awsConfig = this.options.awsConfig
       ? await loadAWSConfig(this.options.awsConfig)
       : undefined;
 
-    logger.verbose(`[DEBUG] TracerPlugin.create() awsConfig loaded: ${awsConfig ? 'yes' : 'no (using default)'}`);
-
     const sqs = (() => {
       if (!awsConfig) {
-        logger.verbose(`[DEBUG] TracerPlugin.create() creating SQS client with region=${this.options.region}`);
         return new SQS({
           region: this.options.region,
         });
       }
-      logger.verbose('[DEBUG] TracerPlugin.create() creating SQS client from SimpleAWS');
       $enum(AWSComponent).forEach((eachComponent) => {
         const config = awsConfig.get(eachComponent);
         if (config) {
@@ -285,8 +340,11 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
       return new SimpleAWS(awsConfig).sqs;
     })();
 
-    logger.verbose('[DEBUG] TracerPlugin.create() SQS client created, creating Tracer...');
-    this.tracer = new Tracer(this.options.queueName, sqs);
+    this.tracer = new Tracer(
+      this.options.queueName,
+      sqs,
+      this.options.debugMemory ?? false,
+    );
     const tracer = (key: string, action: string) => {
       this.last = { key, action };
       return new TracerWrapper(
@@ -320,14 +378,7 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
     })();
   };
 
-  public end = () => {
-    logger.verbose('[DEBUG] TracerPlugin.end() called, starting flush...');
-    const flushPromise = this.tracer.flush();
-    flushPromise
-      .then(() => logger.verbose('[DEBUG] TracerPlugin.end() flush promise resolved'))
-      .catch((err) => logger.warn(`[DEBUG] TracerPlugin.end() flush promise rejected: ${stringifyError(err)}`));
-    return flushPromise;
-  };
+  public end = () => this.tracer.flush();
 
   public error = ({ request, aux }: HandlerContext<TracerPluginAux>) => {
     if (!aux) {
