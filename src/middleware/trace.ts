@@ -73,23 +73,36 @@ export class Tracer {
   public push = (log: TracerLog) => this.buffer.push(log);
 
   public flush = async () => {
+    logger.verbose(`[DEBUG] Tracer.flush() called, buffer.length=${this.buffer.length}`);
     if (this.buffer.length === 0) {
+      logger.verbose('[DEBUG] Tracer.flush() buffer is empty, returning early');
       return;
     }
     try {
+      logger.verbose(`[DEBUG] Tracer.flush() calling sqs.getQueueUrl for queue: ${this.queueName}`);
+      const getQueueUrlStart = Date.now();
       const urlResult = await this.sqs.getQueueUrl({
         QueueName: this.queueName,
       });
+      logger.verbose(`[DEBUG] Tracer.flush() sqs.getQueueUrl completed in ${Date.now() - getQueueUrlStart}ms`);
       logger.stupid(`urlResult`, urlResult);
       if (!urlResult.QueueUrl) {
         throw new Error(`No queue url with name[${this.queueName}]`);
       }
       const eventQueueUrl = urlResult.QueueUrl;
+      logger.verbose(`[DEBUG] Tracer.flush() got queue URL: ${eventQueueUrl}`);
 
       const chunkSize = 10;
+      const totalChunks = Math.ceil(this.buffer.length / chunkSize);
+      logger.verbose(`[DEBUG] Tracer.flush() sending ${this.buffer.length} messages in ${totalChunks} chunk(s)`);
+
       for (let begin = 0; begin < this.buffer.length; begin += chunkSize) {
+        const chunkIndex = Math.floor(begin / chunkSize) + 1;
         const end = Math.min(this.buffer.length, begin + chunkSize);
         const subset = this.buffer.slice(begin, end);
+
+        logger.verbose(`[DEBUG] Tracer.flush() sending chunk ${chunkIndex}/${totalChunks} (${subset.length} messages)`);
+        const sendBatchStart = Date.now();
         const sendBatchResult = await this.sqs.sendMessageBatch({
           QueueUrl: eventQueueUrl,
           Entries: subset.map((each) => ({
@@ -97,11 +110,14 @@ export class Tracer {
             MessageBody: JSON.stringify(each),
           })),
         });
+        logger.verbose(`[DEBUG] Tracer.flush() chunk ${chunkIndex}/${totalChunks} sent in ${Date.now() - sendBatchStart}ms`);
         logger.stupid(`sendBatchResult`, sendBatchResult);
       }
 
       this.buffer = [];
+      logger.verbose('[DEBUG] Tracer.flush() completed successfully');
     } catch (error) {
+      logger.warn(`[DEBUG] Tracer.flush() error: ${stringifyError(error)}`);
       logger.warn(`Error in eventSource: ${error}`);
     }
   };
@@ -237,7 +253,14 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
     })();
   };
 
-  public end = () => this.tracer.flush();
+  public end = () => {
+    logger.verbose('[DEBUG] TracerPlugin.end() called, starting flush...');
+    const flushPromise = this.tracer.flush();
+    flushPromise
+      .then(() => logger.verbose('[DEBUG] TracerPlugin.end() flush promise resolved'))
+      .catch((err) => logger.warn(`[DEBUG] TracerPlugin.end() flush promise rejected: ${stringifyError(err)}`));
+    return flushPromise;
+  };
 
   public error = ({ request, aux }: HandlerContext<TracerPluginAux>) => {
     if (!aux) {
