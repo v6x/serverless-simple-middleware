@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/v6x/serverless-simple-middleware#readme",
   "scripts": {
+    "prepare": "npm run build",
     "lint": "tslint --project tsconfig.json",
     "clean": "rm -rf dist && rm -rf node_modules && yarn install",
     "build": "tsc --project tsconfig.json",
