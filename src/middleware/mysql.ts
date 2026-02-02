@@ -1,8 +1,11 @@
 import type { SecretsManagerClientConfig } from '@aws-sdk/client-secrets-manager';
 import type { ConnectionOptions, PoolOptions } from 'mysql2';
+import { getLogger } from '../utils';
 import { HandlerAuxBase, HandlerPluginBase } from './base';
 import { ConnectionProxy } from './database/connectionProxy';
 import { SQLClient } from './database/sqlClient';
+
+const logger = getLogger(__filename);
 
 export interface DatabaseCredentials {
   username: string;
@@ -49,12 +52,16 @@ export class MySQLPlugin<T = unknown> extends HandlerPluginBase<
   };
 
   public end = () => {
+    logger.verbose('[DEBUG] MySQLPlugin.end() called');
     if (this.proxy) {
+      logger.verbose('[DEBUG] Clearing proxy connection...');
       this.proxy.clearConnection();
     }
     if (this.sqlClient) {
+      logger.verbose('[DEBUG] Clearing sqlClient connection...');
       this.sqlClient.clearConnection();
     }
+    logger.verbose('[DEBUG] MySQLPlugin.end() finished');
   };
 }
 
