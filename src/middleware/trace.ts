@@ -185,9 +185,24 @@ export class Tracer {
       snapshots.push(snapshot);
     };
 
+    // Heartbeat: 이벤트 루프가 살아있는지 확인
+    let heartbeatCount = 0;
+    const heartbeatInterval = this.debugMemory
+      ? setInterval(() => {
+          heartbeatCount++;
+          const mem = process.memoryUsage();
+          console.log(
+            `[HEARTBEAT] #${heartbeatCount} at ${new Date().toISOString()} | ` +
+            `rss=${Math.round(mem.rss / 1024 / 1024)}MB, ` +
+            `heapUsed=${Math.round(mem.heapUsed / 1024 / 1024)}MB`
+          );
+        }, 1000)
+      : null;
+
     capture('flush:start');
 
     if (this.buffer.length === 0) {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
       return;
     }
 
@@ -239,6 +254,11 @@ export class Tracer {
     } catch (error) {
       capture('flush:error');
       logger.warn(`Error in eventSource: ${error}`);
+    } finally {
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        console.log(`[HEARTBEAT] stopped after ${heartbeatCount} beats`);
+      }
     }
   };
 }
