@@ -1,4 +1,5 @@
 import build from './build';
+import buildWebSocket from './buildWebSocket';
 
 import aws from './aws';
 import logger from './logger';
@@ -7,6 +8,7 @@ import trace from './trace';
 
 export const middleware = {
   build,
+  buildWebSocket,
   aws,
   trace,
   logger,
@@ -19,3 +21,4 @@ export * from './database/index';
 export * from './logger';
 export * from './mysql';
 export * from './trace';
+export * from './websocketBase';
