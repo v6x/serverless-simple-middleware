@@ -18,6 +18,15 @@ export class WebSocketHandlerRequest {
     this.event = event;
     this.context = context;
     this.lastError = undefined;
+
+    const ev = this.event as any;
+    if (ev.headers) {
+      const normalized: Record<string, string | undefined> = {};
+      for (const key of Object.keys(ev.headers)) {
+        normalized[key.toLowerCase()] = ev.headers[key];
+      }
+      ev.headers = normalized;
+    }
   }
 
   get body() {
