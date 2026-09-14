@@ -3,8 +3,10 @@ import { getLogger } from '../utils/logger';
 import { treeifyError, type ZodError, type ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import {
+  CorsOptions,
   Handler,
   HandlerAuxBase,
+  HandlerOptions,
   HandlerPluginBase,
   HandlerRequest,
   HandlerResponse,
@@ -45,10 +47,19 @@ class HandlerProxy<A extends HandlerAuxBase> {
   private response: HandlerResponse;
   private aux: A;
 
-  public constructor(event: any, context: any, callback: any) {
+  public constructor(
+    event: any,
+    context: any,
+    callback: any,
+    cors: CorsOptions,
+  ) {
     logger.stupid(`event`, event);
     this.request = new HandlerRequest(event, context);
-    this.response = new HandlerResponse(callback);
+    this.response = new HandlerResponse(
+      callback,
+      cors,
+      this.request.header('Origin'),
+    );
     this.aux = {} as A; // tslint:disable-line
   }
 
@@ -162,13 +173,35 @@ class HandlerProxy<A extends HandlerAuxBase> {
 }
 
 // It will break type safety because there is no relation between Aux and Plugin.
-const build = <Aux extends HandlerAuxBase>(
-  plugins: Array<HandlerPluginBase<any>>,
-) => {
+const build = <Aux extends HandlerAuxBase>({
+  plugins,
+  cors,
+}: HandlerOptions) => {
+  if (!cors) {
+    throw new TypeError(
+      'cors is required; use { allowedOrigins: [] } to disable CORS.',
+    );
+  }
+  if (cors.allowedOrigins === '*' && cors.allowCredentials) {
+    throw new TypeError(
+      'Wildcard origins cannot be used with allowCredentials.',
+    );
+  }
+  if (cors.allowedOrigins !== '*') {
+    for (const origin of cors.allowedOrigins) {
+      const url = new URL(origin);
+      if (!url.host || `${url.protocol}//${url.host}` !== origin) {
+        throw new TypeError(`Invalid CORS origin: ${origin}`);
+      }
+    }
+  }
   const middleware = new HandlerMiddleware<Aux>(plugins);
   const invoke =
     (handler: Handler<Aux>) => (event: any, context: any, callback: any) => {
-      new HandlerProxy<Aux>(event, context, callback).call(middleware, handler);
+      new HandlerProxy<Aux>(event, context, callback, cors).call(
+        middleware,
+        handler,
+      );
     };
 
   /**

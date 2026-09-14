@@ -2,14 +2,17 @@ import { AWSPluginAux, middleware, TracerPluginAux } from '../src';
 
 test('basic', async () => {
   type Aux = AWSPluginAux & TracerPluginAux;
-  const handler = middleware.build<Aux>([
-    middleware.aws(),
-    middleware.trace({
-      route: 'index/type',
-      queueName: 'trace-queue',
-      system: 'hello-world',
-    }),
-  ]);
+  const handler = middleware.build<Aux>({
+    cors: { allowedOrigins: [] },
+    plugins: [
+      middleware.aws(),
+      middleware.trace({
+        route: 'index/type',
+        queueName: 'trace-queue',
+        system: 'hello-world',
+      }),
+    ],
+  });
 
   await handler(async ({ request, response, aux }) => {
     const { aws, tracer } = aux;
