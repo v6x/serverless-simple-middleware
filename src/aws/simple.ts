@@ -6,8 +6,8 @@ import {
 
 import { envDefault as currentStage } from 'simple-staging';
 
+import { randomUUID } from 'crypto';
 import * as fs from 'fs';
-import { nanoid } from 'nanoid/non-secure';
 import * as os from 'os';
 
 import { getLogger, stringifyError } from '../utils';
@@ -272,7 +272,7 @@ export class SimpleAWS {
 
   public readFile = async (bucket: string, key: string): Promise<string> => {
     logger.debug(`Read item[${key}] from bucket[${bucket}]`);
-    const tempFile = `${os.tmpdir()}/${nanoid()}`;
+    const tempFile = `${os.tmpdir()}/${randomUUID()}`;
     try {
       await this.download(bucket, key, tempFile);
       const content = await fs.promises.readFile(tempFile, {
@@ -357,7 +357,7 @@ export class SimpleAWS {
     content: string,
   ): Promise<void> => {
     logger.debug(`Write item[${key}] into bucket[${bucket}]`);
-    const tempFile = `${os.tmpdir()}/${nanoid()}`;
+    const tempFile = `${os.tmpdir()}/${randomUUID()}`;
     try {
       await fs.promises.writeFile(tempFile, content, 'utf-8');
       await this.upload(bucket, tempFile, key);
