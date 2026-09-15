@@ -5,23 +5,26 @@ const dbTest = process.env.TEST_MYSQL ? test : test.skip;
 
 dbTest('basic', async () => {
   type Aux = MySQLPluginAux;
-  const handler = middleware.build<Aux>([
-    middleware.mysql({
-      config: {
-        host: '127.0.0.1',
-        user: 'root',
-        password: 'test***',
-        database: 'test123',
-      },
-      schema: {
-        database: `CREATE DATABASE IF NOT EXISTS test123`,
-        eager: true,
-        tables: {
-          simple: `CREATE TABLE IF NOT EXISTS simple (id INT PRIMARY KEY);`,
+  const handler = middleware.build<Aux>({
+    cors: { allowedOrigins: [] },
+    plugins: [
+      middleware.mysql({
+        config: {
+          host: '127.0.0.1',
+          user: 'root',
+          password: 'test***',
+          database: 'test123',
         },
-      },
-    }),
-  ]);
+        schema: {
+          database: `CREATE DATABASE IF NOT EXISTS test123`,
+          eager: true,
+          tables: {
+            simple: `CREATE TABLE IF NOT EXISTS simple (id INT PRIMARY KEY);`,
+          },
+        },
+      }),
+    ],
+  });
 
   // `build` doesn't return the handler's promise, so the callback is the only
   // completion signal; a plugin/assertion failure surfaces as statusCode 500.

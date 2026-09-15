@@ -66,11 +66,17 @@ export class HandlerRequest {
   }
 }
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'X-Version',
-  'Access-Control-Allow-Credentials': true,
-};
+export type CorsOptions = {
+  exposedHeaders?: readonly string[];
+} & (
+  | { allowedOrigins: '*'; allowCredentials?: false }
+  | { allowedOrigins: readonly string[]; allowCredentials?: boolean }
+);
+
+export interface HandlerOptions {
+  plugins: Array<HandlerPluginBase<any>>;
+  cors: CorsOptions;
+}
 
 export class HandlerResponse {
   public callback: any;
@@ -78,36 +84,28 @@ export class HandlerResponse {
   public result: any | Promise<any> | undefined;
 
   private cookies: string[];
-  private crossOrigin?: string;
   private customHeaders: { [header: string]: any };
+  private cors: CorsOptions;
+  private requestOrigin?: string;
 
-  constructor(callback: any) {
+  constructor(callback: any, cors: CorsOptions, requestOrigin?: string) {
     this.callback = callback;
     this.completed = false;
     this.cookies = [];
     this.customHeaders = {};
+    this.cors = cors;
+    this.requestOrigin = requestOrigin;
   }
 
   public ok(body = {}, code = 200) {
     logger.stupid(`ok`, body);
-    const exposeHeaders = Object.keys(this.customHeaders).join(', ');
-    const headers: { [key: string]: any } = {
-      ...CORS_HEADERS,
-      ...this.customHeaders,
-    };
-    if (exposeHeaders) {
-      headers['Access-Control-Expose-Headers'] = exposeHeaders;
-    }
-    if (this.crossOrigin) {
-      headers['Access-Control-Allow-Origin'] = this.crossOrigin;
-    }
     let multiValueHeaders: any = undefined;
     if (this.cookies.length > 0) {
       multiValueHeaders = { 'Set-Cookie': this.cookies };
     }
     const result = this.callback(null, {
       statusCode: code,
-      headers,
+      headers: this.getHeaders(),
       multiValueHeaders,
       body: JSON.stringify(body),
     });
@@ -119,7 +117,7 @@ export class HandlerResponse {
     logger.stupid(`fail`, body);
     const result = this.callback(null, {
       statusCode: code,
-      headers: CORS_HEADERS,
+      headers: this.getHeaders(),
       body: JSON.stringify(body),
     });
     this.completed = true;
@@ -158,13 +156,63 @@ export class HandlerResponse {
     this.cookies.push(cookieStr);
   }
 
-  public setCrossOrigin = (origin?: string) => {
-    this.crossOrigin = origin;
-  };
-
   public addHeader = (header: string, value: string) => {
     this.customHeaders[header] = value;
   };
+
+  private getHeaders() {
+    const headers = { ...this.customHeaders };
+    const { allowedOrigins } = this.cors;
+    const wildcard = allowedOrigins === '*';
+    const variesByOrigin = !wildcard && allowedOrigins.length > 0;
+    const vary: string[] = [];
+    for (const name of Object.keys(headers)) {
+      const lowerName = name.toLowerCase();
+      if (variesByOrigin && lowerName === 'vary') {
+        vary.push(
+          ...String(headers[name])
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean),
+        );
+        delete headers[name];
+      }
+      if (
+        lowerName === 'access-control-allow-origin' ||
+        lowerName === 'access-control-allow-credentials' ||
+        lowerName === 'access-control-expose-headers'
+      ) {
+        delete headers[name];
+      }
+    }
+
+    if (
+      wildcard ||
+      (this.requestOrigin && allowedOrigins.includes(this.requestOrigin))
+    ) {
+      headers['Access-Control-Allow-Origin'] = wildcard
+        ? '*'
+        : this.requestOrigin;
+      if (this.cors.allowCredentials) {
+        headers['Access-Control-Allow-Credentials'] = 'true';
+      }
+      if (this.cors.exposedHeaders?.length) {
+        headers['Access-Control-Expose-Headers'] =
+          this.cors.exposedHeaders.join(', ');
+      }
+    }
+
+    if (variesByOrigin) {
+      if (
+        !vary.some((name) => name === '*' || name.toLowerCase() === 'origin')
+      ) {
+        vary.push('Origin');
+      }
+      headers.Vary = vary.join(', ');
+    }
+
+    return headers;
+  }
 }
 
 export interface HandlerAuxBase {

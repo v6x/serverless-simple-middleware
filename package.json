@@ -1,7 +1,7 @@
 {
   "name": "serverless-simple-middleware",
   "description": "Simple middleware to translate the interface of lambda's handler to request => response",
-  "version": "0.0.75",
+  "version": "0.0.76",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "author": "VoyagerX",
@@ -26,6 +26,7 @@
     "build": "tsc --project tsconfig.json",
     "build:watch": "tsc --project tsconfig.json --watch",
     "test": "jest --config jest.config.js",
+    "test:cors": "yarn build && tsc --noEmit --strict --skipLibCheck --target ES2022 --module commonjs __tests__/cors.types.ts && cross-env NODE_ENV=production node --test __tests__/cors.test.js",
     "test:watch": "jest --config jest.config.js --watch",
     "test:db": "docker run --rm -d --name ssm-test-mysql -e MYSQL_ROOT_PASSWORD='test***' -p 3306:3306 mysql:8 >/dev/null && for i in $(seq 60); do docker exec ssm-test-mysql mysqladmin ping -h127.0.0.1 -uroot -p'test***' --silent >/dev/null 2>&1 && break; sleep 1; done; TEST_MYSQL=1 jest --config jest.config.js; ec=$?; docker stop ssm-test-mysql >/dev/null; exit $ec",
     "deploy": "yarn build && yarn publish"

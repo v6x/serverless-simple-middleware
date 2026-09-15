@@ -24,6 +24,7 @@ class WebSocketHandlerMiddleware<A extends WebSocketHandlerAuxBase> {
   constructor(plugins: Array<HandlerPluginBase<any>>) {
     this.plugins = plugins;
     this.auxPromise = this.createAuxPromise();
+    void this.auxPromise.catch(() => {});
   }
 
   private createAuxPromise = (): Promise<A> => {
