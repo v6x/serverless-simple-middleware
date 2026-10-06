@@ -173,11 +173,7 @@ class HandlerProxy<A extends HandlerAuxBase> {
   };
 }
 
-// It will break type safety because there is no relation between Aux and Plugin.
-const build = <Aux extends HandlerAuxBase>({
-  plugins,
-  cors,
-}: HandlerOptions) => {
+const validateCors = (cors: CorsOptions) => {
   if (!cors) {
     throw new TypeError(
       'cors is required; use { allowedOrigins: [] } to disable CORS.',
@@ -196,7 +192,16 @@ const build = <Aux extends HandlerAuxBase>({
       }
     }
   }
-  const middleware = new HandlerMiddleware<Aux>(plugins);
+};
+
+export type BuiltHandler<Aux extends HandlerAuxBase> = ReturnType<
+  typeof bindCors<Aux>
+>;
+
+const bindCors = <Aux extends HandlerAuxBase>(
+  middleware: HandlerMiddleware<Aux>,
+  cors: CorsOptions,
+) => {
   const invoke =
     (handler: Handler<Aux>) => (event: any, context: any, callback: any) => {
       new HandlerProxy<Aux>(event, context, callback, cors).call(
@@ -302,6 +307,19 @@ const build = <Aux extends HandlerAuxBase>({
   return Object.assign(invoke, {
     withBody,
     withQuery,
+    withCors: (next: CorsOptions): BuiltHandler<Aux> => {
+      validateCors(next);
+      return bindCors(middleware, next);
+    },
   });
+};
+
+// It will break type safety because there is no relation between Aux and Plugin.
+const build = <Aux extends HandlerAuxBase>({
+  plugins,
+  cors,
+}: HandlerOptions): BuiltHandler<Aux> => {
+  validateCors(cors);
+  return bindCors(new HandlerMiddleware<Aux>(plugins), cors);
 };
 export default build;
