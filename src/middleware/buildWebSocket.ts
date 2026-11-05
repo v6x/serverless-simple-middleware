@@ -3,9 +3,11 @@ import type {
   APIGatewayProxyWebsocketHandlerV2,
   Context,
 } from 'aws-lambda';
+import { treeifyError, type ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import { getLogger } from '../utils/logger';
 import { HandlerPluginBase } from './base';
+import { InvalidResponder, respondInvalid, validate } from './validation';
 import {
   WebSocketHandler,
   WebSocketHandlerAuxBase,
@@ -14,6 +16,7 @@ import {
 } from './websocketBase';
 
 const logger = getLogger(__filename);
+const INTERNAL_ERROR = { error: 'Internal Server Error' };
 
 type WebSocketDelegator = () => Promise<WebSocketHandlerResponse | undefined>;
 
@@ -68,9 +71,7 @@ class WebSocketHandlerProxy<A extends WebSocketHandlerAuxBase> {
       );
       return {
         statusCode: 500,
-        body: JSON.stringify(
-          error instanceof Error ? { error: error.message } : error,
-        ),
+        body: JSON.stringify(INTERNAL_ERROR),
       };
     }
 
@@ -175,26 +176,83 @@ class WebSocketHandlerProxy<A extends WebSocketHandlerAuxBase> {
 
     this.result = {
       statusCode: 500,
-      body: JSON.stringify(
-        error instanceof Error ? { error: error.message } : error,
-      ),
+      body: JSON.stringify(INTERNAL_ERROR),
     };
 
     return error;
   };
 }
 
+export interface WebSocketBuildOptions {
+  /** Response for failed validation unless an endpoint overrides it; defaults to 400 with the zod error tree. */
+  onInvalid?: InvalidResponder<WebSocketHandlerResponse>;
+}
+
 const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
   plugins: Array<HandlerPluginBase<any>>,
+  options: WebSocketBuildOptions = {},
 ) => {
   const middleware = new WebSocketHandlerMiddleware<Aux>(plugins);
-  return (handler: WebSocketHandler<Aux>): APIGatewayProxyWebsocketHandlerV2 =>
+  const invoke =
+    (handler: WebSocketHandler<Aux>): APIGatewayProxyWebsocketHandlerV2 =>
     async (event: APIGatewayProxyWebsocketEventV2, context: Context) => {
       return new WebSocketHandlerProxy<Aux>(event, context).call(
         middleware,
         handler,
       );
     };
+
+  /**
+   * @param schema - Zod schema to validate the message body.
+   * @param handler - Handler that receives the validated body.
+   * @param onInvalid - Optional callback returning the response for an invalid
+   *   body, ahead of the builder's `onInvalid`. `{ logOnly: true }` only logs a
+   *   failure and passes the raw body through.
+   */
+  const withBody = <S>(
+    schema: ZodSchema<S>,
+    handler: (context: {
+      request: Omit<WebSocketHandlerRequest, 'body'> & { body: S };
+      response: undefined;
+      aux: Aux;
+    }) => ReturnType<WebSocketHandler<Aux>>,
+    onInvalid?:
+      | InvalidResponder<WebSocketHandlerResponse, S>
+      | { logOnly: true },
+  ) =>
+    invoke(async ({ request, response, aux }) => {
+      const { outcome, observation } = validate(schema, () => request.body, {
+        logOnly: typeof onInvalid === 'object' && onInvalid?.logOnly === true,
+        key: 'body',
+        target: request.routeKey,
+        source: `route=${request.routeKey}`,
+      });
+      request.validation = observation;
+
+      if (outcome.kind === 'invalid') {
+        const custom = await respondInvalid(outcome.error, [
+          typeof onInvalid === 'function' ? onInvalid : undefined,
+          options.onInvalid,
+        ]);
+        return (
+          custom ?? {
+            statusCode: 400,
+            body: JSON.stringify(treeifyError(outcome.error)),
+          }
+        );
+      }
+      if (outcome.kind === 'valid') {
+        request.body = outcome.data;
+      }
+      return handler({
+        request: request as Omit<WebSocketHandlerRequest, 'body'> & { body: S },
+        response,
+        aux,
+      });
+    });
+
+  invoke.withBody = withBody;
+  return invoke;
 };
 
 export default buildWebSocket;

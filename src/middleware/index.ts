@@ -21,4 +21,11 @@ export * from './database/index';
 export * from './logger';
 export * from './mysql';
 export * from './trace';
+export {
+  parseLogOnly,
+  warnInvalidPayload,
+  type InvalidResponder,
+  type ValidationObservation,
+} from './validation';
 export * from './websocketBase';
+export type { WebSocketBuildOptions } from './buildWebSocket';

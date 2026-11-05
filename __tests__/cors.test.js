@@ -75,7 +75,7 @@ test('plugin initialization failure returns CORS before begin hooks run', async 
     build({ plugins: [new FailingPlugin()], cors })(() => ({})),
   );
   assertCors(response, 500);
-  assert.equal(response.body, '{"error":"fixture initialization failure"}');
+  assert.equal(response.body, '{"error":"Internal Server Error"}');
 });
 
 test('thrown handler errors retain CORS', async () => {
@@ -85,7 +85,7 @@ test('thrown handler errors retain CORS', async () => {
     }),
   );
   assertCors(response, 500);
-  assert.equal(response.body, '{"error":"fixture handler failure"}');
+  assert.equal(response.body, '{"error":"Internal Server Error"}');
 });
 
 for (const method of ['withBody', 'withQuery']) {
