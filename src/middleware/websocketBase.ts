@@ -35,8 +35,8 @@ export class WebSocketHandlerRequest {
     if (this.lazyBody === undefined && this.event.body) {
       try {
         this.lazyBody = JSON.parse(this.event.body);
-      } catch (error) {
-        logger.error(`Failed to parse WebSocket body: ${error}`);
+      } catch {
+        logger.error('WebSocket body is not valid JSON');
         this.lazyBody = {};
       }
     }

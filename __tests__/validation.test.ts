@@ -101,7 +101,7 @@ test('logOnly leaves an unparsable body to the handler and logs field paths', as
   const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
   log.mockRestore();
   expect(lines).toContain('body could not be parsed');
-  expect(lines).toContain('events.0.value: Invalid input: expected number');
+  expect(lines).toContain('events[].value: Invalid input: expected number');
   expect(lines).not.toContain('secret');
 });
 
@@ -197,6 +197,104 @@ test('parseLogOnly returns the value unchanged and logs a mismatch', () => {
   expect(result).toBe(value);
   expect(lines).toContain('job: count: Invalid input: expected number');
   expect(lines).not.toContain('secret');
+});
+
+test('parseLogOnly logs a throwing schema instead of throwing', () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const value = { n: 1 };
+  const schema = z.object({ n: z.number() }).refine(() => {
+    throw new Error('x'.repeat(300));
+  });
+
+  const result = parseLogOnly('job', schema, value);
+  const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+  log.mockRestore();
+
+  expect(result).toBe(value);
+  expect(lines).toContain(
+    `Validation threw (logOnly) job: ${'x'.repeat(128)}…`,
+  );
+  expect(lines).not.toContain('x'.repeat(129));
+});
+
+test('enforce skips values the schema passes through untouched, however deep', async () => {
+  const deep = `${'{"a":'.repeat(3000)}1${'}'.repeat(3000)}`;
+  const invoke = handler.withBody(z.object({ a: z.any() }), () => 'ran');
+
+  expect(await call(invoke, { body: deep })).toMatchObject({
+    statusCode: 200,
+    body: '"ran"',
+  });
+});
+
+test('enforce answers an unparsable body with 400 and never logs it', async () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const invoke = handler.withBody(z.object({ n: z.number() }), () => 'ran');
+
+  const response = await call(invoke, { body: 'secret=1' });
+  const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+  log.mockRestore();
+
+  expect(response.statusCode).toBe(400);
+  expect(JSON.parse(response.body)).toEqual({
+    errors: ['body could not be parsed'],
+  });
+  expect(lines).toContain('Validation failed resource=');
+  expect(lines).not.toContain('secret');
+});
+
+test('issue logs fold array indexes, clip path and message apart, and cap entries', async () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const long = 'k'.repeat(70);
+  const fields = Object.fromEntries(
+    Array.from({ length: 25 }, (_, i) => [`f${i}`, z.string()]),
+  );
+  const folded = z.object({
+    items: z.array(z.object({ x: z.string() })),
+    [long]: z.object({ y: z.string() }),
+    note: z.string().refine(() => false, 'm'.repeat(200)),
+  });
+  const body = JSON.stringify({
+    items: Array.from({ length: 50 }, () => ({})),
+    [long]: {},
+    note: 'a',
+  });
+
+  await call(
+    handler.withBody(folded, () => 'ran'),
+    { body },
+  );
+  await call(
+    handler.withBody(z.object(fields), () => 'ran'),
+    { body: '{}' },
+  );
+  await call(
+    handler.withBody(z.object(fields), () => 'ran', { logOnly: true }),
+    { body: '{}' },
+  );
+  const lines = log.mock.calls.map(([line]) => String(line));
+  log.mockRestore();
+
+  const [foldedLine] = lines.filter((line) => line.includes('items[]'));
+  expect(
+    foldedLine.split('items[].x: Invalid input: expected string').length,
+  ).toBe(2);
+  expect(foldedLine).not.toContain('items.0');
+  expect(foldedLine).toContain(
+    `${'k'.repeat(64)}…: Invalid input: expected string, received undefined`,
+  );
+  expect(foldedLine).toContain(`note: ${'m'.repeat(128)}…`);
+  expect(foldedLine).not.toContain('m'.repeat(129));
+  const capped = lines.filter(
+    (line) => line.includes('Validation failed') && line.includes('f24'),
+  );
+  expect(capped).toEqual([]);
+  expect(
+    lines.filter(
+      (line) =>
+        line.includes('Validation failed') && line.includes('(+5 more)'),
+    ),
+  ).toHaveLength(2);
 });
 
 test('builder onInvalid applies to every endpoint unless the endpoint answers first', async () => {
@@ -307,6 +405,7 @@ test('the tracer records what validation saw without input values', async () => 
     const observe = traced.withBody(schema, () => 'ran', { logOnly: true });
 
     await call(clean, { resource: '/items', body: '{"n":1}' });
+    await call(clean, { resource: '/items', body: '{"n":1,"extra":1}' });
     await new Promise((resolve) => setImmediate(resolve));
     expect(send).not.toHaveBeenCalled();
 

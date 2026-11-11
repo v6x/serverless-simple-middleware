@@ -56,7 +56,9 @@ export class Logger {
     if (this.severity >= severity(level)) {
       console.log(
         `[${new Date().toISOString()}][${level.toUpperCase()}][${this.name}] ${
-          message instanceof Error ? stringifyError(message) : message
+          typeof message === 'object' && message !== null
+            ? stringifyError(message)
+            : message
         }`,
       );
     }

@@ -1,4 +1,4 @@
-import type { z, ZodError, ZodSchema } from 'zod';
+import { type z, type ZodSchema, ZodError } from 'zod';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger(__filename);
@@ -29,6 +29,18 @@ interface ValidationIssue {
 // Caps how much one request can write into logs and the tracer.
 const MAX_ENTRIES = 20;
 const MAX_KEY_LENGTH = 64;
+const MAX_MESSAGE_LENGTH = 128;
+
+const clip = (text: string, max: number) =>
+  text.length > max ? `${text.slice(0, max)}…` : text;
+
+// Array indexes become [] so all elements of a list share one entry.
+const joinPath = (path: string, key: PropertyKey) =>
+  typeof key === 'number'
+    ? `${path}[]`
+    : path
+      ? `${path}.${String(key)}`
+      : String(key);
 
 const describeIssues = (
   issues: ValidationIssue[],
@@ -37,53 +49,13 @@ const describeIssues = (
   issues.flatMap(({ path, message, errors }) =>
     errors?.length
       ? describeIssues(errors.flat(), [...prefix, ...path])
-      : [`${[...prefix, ...path].join('.') || '(root)'}: ${message}`],
+      : [
+          `${clip([...prefix, ...path].reduce<string>(joinPath, '') || '(root)', MAX_KEY_LENGTH)}: ${clip(message, MAX_MESSAGE_LENGTH)}`,
+        ],
   );
-
-/** Logs a logOnly validation failure as field paths and zod messages (which may name unknown keys), never input values. */
-export const warnInvalidPayload = (
-  name: string,
-  error: { issues: ValidationIssue[] },
-) =>
-  logger.warn(
-    `Validation failed (logOnly) ${name}: ${describeIssues(error.issues).join('; ')}`,
-  );
-
-export const parseLogOnly = <Z extends ZodSchema>(
-  name: string,
-  schema: Z,
-  value: unknown,
-): z.input<Z> => {
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) {
-    warnInvalidPayload(name, parsed.error);
-  }
-  return value as z.input<Z>;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-// Paths present in the input but stripped by the schema; array indexes become [].
-const droppedKeys = (raw: unknown, parsed: unknown, path = ''): string[] => {
-  if (Array.isArray(raw) && Array.isArray(parsed)) {
-    return raw.flatMap((each, i) => droppedKeys(each, parsed[i], `${path}[]`));
-  }
-  if (!isRecord(raw) || !isRecord(parsed)) {
-    return [];
-  }
-  return Object.keys(raw).flatMap((key) => {
-    const at = path ? `${path}.${key}` : key;
-    return Object.prototype.hasOwnProperty.call(parsed, key)
-      ? droppedKeys(raw[key], parsed[key], at)
-      : [at];
-  });
-};
 
 const capped = (entries: string[]) => {
-  const unique = [...new Set(entries)].map((each) =>
-    each.length > MAX_KEY_LENGTH ? `${each.slice(0, MAX_KEY_LENGTH)}…` : each,
-  );
+  const unique = [...new Set(entries)];
   return unique.length > MAX_ENTRIES
     ? [
         ...unique.slice(0, MAX_ENTRIES),
@@ -92,9 +64,43 @@ const capped = (entries: string[]) => {
     : unique;
 };
 
+/** Logs a logOnly validation failure as field paths and zod messages (which may name unknown keys), never input values. */
+export const warnInvalidPayload = (
+  name: string,
+  error: { issues: ValidationIssue[] },
+) =>
+  logger.warn(
+    `Validation failed (logOnly) ${name}: ${capped(describeIssues(error.issues)).join('; ')}`,
+  );
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// Paths present in the input but stripped by the schema.
+const droppedKeys = (raw: unknown, parsed: unknown, path = ''): string[] => {
+  if (raw === parsed) {
+    return [];
+  }
+  if (Array.isArray(raw) && Array.isArray(parsed)) {
+    return raw.flatMap((each, i) =>
+      droppedKeys(each, parsed[i], joinPath(path, i)),
+    );
+  }
+  if (!isRecord(raw) || !isRecord(parsed)) {
+    return [];
+  }
+  return Object.keys(raw).flatMap((key) => {
+    const at = joinPath(path, key);
+    return Object.prototype.hasOwnProperty.call(parsed, key)
+      ? droppedKeys(raw[key], parsed[key], at)
+      : [clip(at, MAX_KEY_LENGTH)];
+  });
+};
+
 /**
  * Validates `read()` against `schema`. logOnly only logs and always passes;
- * enforce returns the parsed value or the error. Unknown keys are logged in both.
+ * enforce returns the parsed value or the error. Unknown keys are logged in
+ * both but observed only in logOnly.
  */
 export const validate = <S>(
   schema: ZodSchema<S>,
@@ -119,40 +125,46 @@ export const validate = <S>(
         `Unknown keys${label} ${source}: ${capped(unknownKeys).join(', ')}`,
       );
     }
-    return observe([], unknownKeys);
+    return unknownKeys;
   };
 
+  let raw: unknown;
+  try {
+    raw = read();
+  } catch {
+    const message = `${key} could not be parsed`;
+    (logOnly ? logger.warn : logger.error)(
+      `Validation failed${label} ${source}: ${message}`,
+    );
+    return {
+      outcome: logOnly
+        ? { kind: 'pass' }
+        : {
+            kind: 'invalid',
+            error: new ZodError([
+              { code: 'custom', path: [], message, input: undefined },
+            ]) as ZodError<S>,
+          },
+      observation: observe([`${key}: could not be parsed`]),
+    };
+  }
+
   if (!logOnly) {
-    const input = read();
-    const parsed = schema.safeParse(input);
+    const parsed = schema.safeParse(raw);
     if (!parsed.success) {
       const issues = describeIssues(parsed.error.issues);
-      logger.error(`Validation failed ${source}: ${issues.join('; ')}`);
+      logger.error(`Validation failed ${source}: ${capped(issues).join('; ')}`);
       return {
         outcome: { kind: 'invalid', error: parsed.error },
         observation: observe(issues),
       };
     }
-    return {
-      outcome: { kind: 'valid', data: parsed.data },
-      observation: reportUnknown(input, parsed.data),
-    };
+    reportUnknown(raw, parsed.data);
+    return { outcome: { kind: 'valid', data: parsed.data } };
   }
 
-  let value: unknown;
   try {
-    value = read();
-  } catch {
-    logger.warn(
-      `Validation failed (logOnly) ${source}: ${key} could not be parsed`,
-    );
-    return {
-      outcome: { kind: 'pass' },
-      observation: observe([`${key}: could not be parsed`]),
-    };
-  }
-  try {
-    const parsed = schema.safeParse(value);
+    const parsed = schema.safeParse(raw);
     if (!parsed.success) {
       warnInvalidPayload(source, parsed.error);
       return {
@@ -162,17 +174,32 @@ export const validate = <S>(
     }
     return {
       outcome: { kind: 'pass' },
-      observation: reportUnknown(value, parsed.data),
+      observation: observe([], reportUnknown(raw, parsed.data)),
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.warn(
-      `Validation threw (logOnly) ${source}: ${error instanceof Error ? error.message : String(error)}`,
+      `Validation threw (logOnly) ${source}: ${clip(message, MAX_MESSAGE_LENGTH)}`,
     );
     return {
       outcome: { kind: 'pass' },
       observation: observe(['(root): validation threw']),
     };
   }
+};
+
+export const parseLogOnly = <Z extends ZodSchema>(
+  name: string,
+  schema: Z,
+  value: unknown,
+): z.input<Z> => {
+  validate(schema, () => value, {
+    logOnly: true,
+    key: 'value',
+    target: name,
+    source: name,
+  });
+  return value as z.input<Z>;
 };
 
 /** The first responder that returns a response wins; undefined means use the default. */

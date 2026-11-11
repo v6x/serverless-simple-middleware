@@ -35,7 +35,11 @@ export class HandlerRequest {
 
   get body() {
     if (this.lazyBody === undefined && this.event.body) {
-      this.lazyBody = JSON.parse(this.event.body);
+      try {
+        this.lazyBody = JSON.parse(this.event.body);
+      } catch {
+        throw new SyntaxError('Request body is not valid JSON');
+      }
     }
     return this.lazyBody || {};
   }
