@@ -43,6 +43,18 @@ export const currentLogLevel = $enum(LogLevel).asValueOrDefault(
 
 type LogMessage = string | Error;
 
+// Logging must never throw, even for circular objects JSON cannot hold.
+const format = (message: unknown) => {
+  if (typeof message !== 'object' || message === null) {
+    return message;
+  }
+  try {
+    return stringifyError(message);
+  } catch {
+    return String(message);
+  }
+};
+
 export class Logger {
   private name: string;
   private severity: number;
@@ -55,11 +67,7 @@ export class Logger {
   public log = (level: LogLevel, message: LogMessage) => {
     if (this.severity >= severity(level)) {
       console.log(
-        `[${new Date().toISOString()}][${level.toUpperCase()}][${this.name}] ${
-          typeof message === 'object' && message !== null
-            ? stringifyError(message)
-            : message
-        }`,
+        `[${new Date().toISOString()}][${level.toUpperCase()}][${this.name}] ${format(message)}`,
       );
     }
     return message;

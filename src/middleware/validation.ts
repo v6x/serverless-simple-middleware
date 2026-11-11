@@ -1,4 +1,4 @@
-import { type z, type ZodSchema, ZodError } from 'zod';
+import { type z, type ZodError, type ZodSchema, ZodRealError } from 'zod';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger(__filename);
@@ -14,6 +14,11 @@ export interface ValidationObservation {
 export type InvalidResponder<R, S = unknown> = (
   error: ZodError<S>,
 ) => R | void | Promise<R | void>;
+
+/** logOnly passes the raw value through, so it is typed as the schema input. */
+export type Validated<Z extends ZodSchema, O> = O extends { logOnly: true }
+  ? z.input<Z>
+  : z.output<Z>;
 
 export type ValidationOutcome<S> =
   | { kind: 'pass' }
@@ -141,7 +146,7 @@ export const validate = <S>(
         ? { kind: 'pass' }
         : {
             kind: 'invalid',
-            error: new ZodError([
+            error: new ZodRealError([
               { code: 'custom', path: [], message, input: undefined },
             ]) as ZodError<S>,
           },

@@ -60,8 +60,9 @@ test('logOnly passes the raw body through whether valid or not', async () => {
 });
 
 test('logOnly types the request part as the schema input', async () => {
+  const schema = z.object({ id: z.string().transform(Number) });
   const invoke = handler.withPath(
-    z.object({ id: z.string().transform(Number) }),
+    schema,
     ({ request }) => {
       // @ts-expect-error logOnly hands over the raw string, not the transformed number
       const id: number = request.path.id;
@@ -69,6 +70,30 @@ test('logOnly types the request part as the schema input', async () => {
     },
     { logOnly: true },
   );
+  handler.withPath(
+    schema,
+    ({ request }) => {
+      const id: number = request.path.id;
+      return id;
+    },
+    (error) => {
+      const typed: z.ZodError<{ id: number }> = error;
+      return typed && undefined;
+    },
+  );
+  buildWebSocket([]).withBody(
+    schema,
+    ({ request }) => {
+      // @ts-expect-error logOnly hands over the raw string, not the transformed number
+      const id: number = request.body.id;
+      return { statusCode: id };
+    },
+    { logOnly: true },
+  );
+  // @ts-expect-error parseLogOnly returns the value unparsed
+  const parsed: { id: number } = parseLogOnly('job', schema, { id: '1' });
+  const method = 'withBody' as 'withBody' | 'withQuery';
+  handler[method](schema, () => parsed);
 
   expect(await call(invoke, { pathParameters: { id: '12' } })).toMatchObject({
     statusCode: 200,

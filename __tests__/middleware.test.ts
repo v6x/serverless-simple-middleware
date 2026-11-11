@@ -1,5 +1,6 @@
 import {
   AWSPluginAux,
+  getLogger,
   HandlerRequest,
   middleware,
   TracerPluginAux,
@@ -26,6 +27,15 @@ test('a thrown non-Error is hidden from the response but logged in full', async 
     body: '{"error":"Internal Server Error"}',
   });
   expect(lines).toContain('"code":"NOT_FOUND"');
+});
+
+test('the logger never throws on a circular object', () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const circular: { self?: unknown } = {};
+  circular.self = circular;
+
+  expect(() => getLogger('t').error(circular as Error)).not.toThrow();
+  log.mockRestore();
 });
 
 test('an unparsable body is reported without quoting it', () => {

@@ -7,7 +7,12 @@ import { treeifyError, type z, type ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import { getLogger } from '../utils/logger';
 import { HandlerPluginBase } from './base';
-import { InvalidResponder, respondInvalid, validate } from './validation';
+import {
+  InvalidResponder,
+  respondInvalid,
+  validate,
+  Validated,
+} from './validation';
 import {
   WebSocketHandler,
   WebSocketHandlerAuxBase,
@@ -209,36 +214,26 @@ const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
    *   body, ahead of the builder's `onInvalid`. `{ logOnly: true }` only logs a
    *   failure and passes the raw body through.
    */
-  function withBody<S>(
-    schema: ZodSchema<S>,
-    handler: (context: {
-      request: Omit<WebSocketHandlerRequest, 'body'> & { body: S };
-      response: undefined;
-      aux: Aux;
-    }) => ReturnType<WebSocketHandler<Aux>>,
-    onInvalid?: InvalidResponder<WebSocketHandlerResponse, S>,
-  ): APIGatewayProxyWebsocketHandlerV2;
-  function withBody<Z extends ZodSchema>(
+  const withBody = <
+    Z extends ZodSchema,
+    O extends
+      | InvalidResponder<WebSocketHandlerResponse, z.output<Z>>
+      | { logOnly: true } = InvalidResponder<
+      WebSocketHandlerResponse,
+      z.output<Z>
+    >,
+  >(
     schema: Z,
     handler: (context: {
-      request: Omit<WebSocketHandlerRequest, 'body'> & { body: z.input<Z> };
+      request: Omit<WebSocketHandlerRequest, 'body'> & {
+        body: Validated<Z, O>;
+      };
       response: undefined;
       aux: Aux;
     }) => ReturnType<WebSocketHandler<Aux>>,
-    onInvalid: { logOnly: true },
-  ): APIGatewayProxyWebsocketHandlerV2;
-  function withBody<S>(
-    schema: ZodSchema<S>,
-    handler: (context: {
-      request: Omit<WebSocketHandlerRequest, 'body'> & { body: S };
-      response: undefined;
-      aux: Aux;
-    }) => ReturnType<WebSocketHandler<Aux>>,
-    onInvalid?:
-      | InvalidResponder<WebSocketHandlerResponse, S>
-      | { logOnly: true },
-  ) {
-    return invoke(async ({ request, response, aux }) => {
+    onInvalid?: O,
+  ) =>
+    invoke(async ({ request, response, aux }) => {
       const { outcome, observation } = validate(schema, () => request.body, {
         logOnly: typeof onInvalid === 'object' && onInvalid?.logOnly === true,
         key: 'body',
@@ -263,12 +258,13 @@ const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
         request.body = outcome.data;
       }
       return handler({
-        request: request as Omit<WebSocketHandlerRequest, 'body'> & { body: S },
+        request: request as Omit<WebSocketHandlerRequest, 'body'> & {
+          body: Validated<Z, O>;
+        },
         response,
         aux,
       });
     });
-  }
 
   invoke.withBody = withBody;
   return invoke;

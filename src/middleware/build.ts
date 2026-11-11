@@ -12,7 +12,12 @@ import {
   HandlerResponse,
   InvalidResponse,
 } from './base';
-import { InvalidResponder, respondInvalid, validate } from './validation';
+import {
+  InvalidResponder,
+  respondInvalid,
+  validate,
+  Validated,
+} from './validation';
 
 const logger = getLogger(__filename);
 const INTERNAL_ERROR = { error: 'Internal Server Error' };
@@ -221,37 +226,23 @@ const bindCors = <Aux extends HandlerAuxBase>(
    *   the handler gets it unparsed. An unparsable body is only logged; the
    *   handler hits the same error on read.
    */
-  const withValidated = <K extends 'body' | 'query' | 'path' | 'event'>(
-    key: K,
-  ) => {
-    function validated<S>(
-      schema: ZodSchema<S>,
-      handler: (context: {
-        request: Omit<HandlerRequest, K> & { [P in K]: S };
-        response: HandlerResponse;
-        aux: Aux;
-      }) => any,
-      onInvalid?: InvalidResponder<InvalidResponse, S>,
-    ): ReturnType<typeof invoke>;
-    function validated<Z extends ZodSchema>(
+  const withValidated =
+    <K extends 'body' | 'query' | 'path' | 'event'>(key: K) =>
+    <
+      Z extends ZodSchema,
+      O extends
+        | InvalidResponder<InvalidResponse, z.output<Z>>
+        | { logOnly: true } = InvalidResponder<InvalidResponse, z.output<Z>>,
+    >(
       schema: Z,
       handler: (context: {
-        request: Omit<HandlerRequest, K> & { [P in K]: z.input<Z> };
+        request: Omit<HandlerRequest, K> & { [P in K]: Validated<Z, O> };
         response: HandlerResponse;
         aux: Aux;
       }) => any,
-      onInvalid: { logOnly: true },
-    ): ReturnType<typeof invoke>;
-    function validated<S>(
-      schema: ZodSchema<S>,
-      handler: (context: {
-        request: Omit<HandlerRequest, K> & { [P in K]: S };
-        response: HandlerResponse;
-        aux: Aux;
-      }) => any,
-      onInvalid?: InvalidResponder<InvalidResponse, S> | { logOnly: true },
-    ) {
-      return invoke(async ({ request, response, aux }) => {
+      onInvalid?: O,
+    ) =>
+      invoke(async ({ request, response, aux }) => {
         const target =
           (key === 'event'
             ? process.env.AWS_LAMBDA_FUNCTION_NAME
@@ -277,17 +268,16 @@ const bindCors = <Aux extends HandlerAuxBase>(
             : response.fail(treeifyError(outcome.error), 400);
         }
         if (outcome.kind === 'valid') {
-          (request as unknown as Record<K, S>)[key] = outcome.data;
+          (request as unknown as Record<K, unknown>)[key] = outcome.data;
         }
         return handler({
-          request: request as Omit<HandlerRequest, K> & { [P in K]: S },
+          request: request as Omit<HandlerRequest, K> & {
+            [P in K]: Validated<Z, O>;
+          },
           response,
           aux,
         });
       });
-    }
-    return validated;
-  };
 
   return Object.assign(invoke, {
     withBody: withValidated('body'),
