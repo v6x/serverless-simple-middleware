@@ -59,6 +59,23 @@ test('logOnly passes the raw body through whether valid or not', async () => {
   });
 });
 
+test('logOnly types the request part as the schema input', async () => {
+  const invoke = handler.withPath(
+    z.object({ id: z.string().transform(Number) }),
+    ({ request }) => {
+      // @ts-expect-error logOnly hands over the raw string, not the transformed number
+      const id: number = request.path.id;
+      return id;
+    },
+    { logOnly: true },
+  );
+
+  expect(await call(invoke, { pathParameters: { id: '12' } })).toMatchObject({
+    statusCode: 200,
+    body: '"12"',
+  });
+});
+
 test('logOnly leaves an unparsable body to the handler and logs field paths', async () => {
   const log = jest.spyOn(console, 'log').mockImplementation(() => {});
   const invoke = handler.withBody(

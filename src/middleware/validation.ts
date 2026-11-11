@@ -1,4 +1,4 @@
-import type { ZodError, ZodSchema } from 'zod';
+import type { z, ZodError, ZodSchema } from 'zod';
 import { getLogger } from '../utils/logger';
 
 const logger = getLogger(__filename);
@@ -49,16 +49,16 @@ export const warnInvalidPayload = (
     `Validation failed (logOnly) ${name}: ${describeIssues(error.issues).join('; ')}`,
   );
 
-export const parseLogOnly = <S>(
+export const parseLogOnly = <Z extends ZodSchema>(
   name: string,
-  schema: ZodSchema<S>,
+  schema: Z,
   value: unknown,
-): S => {
+): z.input<Z> => {
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
     warnInvalidPayload(name, parsed.error);
   }
-  return value as S;
+  return value as z.input<Z>;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

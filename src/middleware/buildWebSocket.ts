@@ -3,7 +3,7 @@ import type {
   APIGatewayProxyWebsocketHandlerV2,
   Context,
 } from 'aws-lambda';
-import { treeifyError, type ZodSchema } from 'zod';
+import { treeifyError, type z, type ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import { getLogger } from '../utils/logger';
 import { HandlerPluginBase } from './base';
@@ -209,7 +209,25 @@ const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
    *   body, ahead of the builder's `onInvalid`. `{ logOnly: true }` only logs a
    *   failure and passes the raw body through.
    */
-  const withBody = <S>(
+  function withBody<S>(
+    schema: ZodSchema<S>,
+    handler: (context: {
+      request: Omit<WebSocketHandlerRequest, 'body'> & { body: S };
+      response: undefined;
+      aux: Aux;
+    }) => ReturnType<WebSocketHandler<Aux>>,
+    onInvalid?: InvalidResponder<WebSocketHandlerResponse, S>,
+  ): APIGatewayProxyWebsocketHandlerV2;
+  function withBody<Z extends ZodSchema>(
+    schema: Z,
+    handler: (context: {
+      request: Omit<WebSocketHandlerRequest, 'body'> & { body: z.input<Z> };
+      response: undefined;
+      aux: Aux;
+    }) => ReturnType<WebSocketHandler<Aux>>,
+    onInvalid: { logOnly: true },
+  ): APIGatewayProxyWebsocketHandlerV2;
+  function withBody<S>(
     schema: ZodSchema<S>,
     handler: (context: {
       request: Omit<WebSocketHandlerRequest, 'body'> & { body: S };
@@ -219,8 +237,8 @@ const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
     onInvalid?:
       | InvalidResponder<WebSocketHandlerResponse, S>
       | { logOnly: true },
-  ) =>
-    invoke(async ({ request, response, aux }) => {
+  ) {
+    return invoke(async ({ request, response, aux }) => {
       const { outcome, observation } = validate(schema, () => request.body, {
         logOnly: typeof onInvalid === 'object' && onInvalid?.logOnly === true,
         key: 'body',
@@ -250,6 +268,7 @@ const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
         aux,
       });
     });
+  }
 
   invoke.withBody = withBody;
   return invoke;

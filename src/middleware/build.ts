@@ -1,6 +1,6 @@
 import { getLogger } from '../utils/logger';
 
-import { treeifyError, type ZodSchema } from 'zod';
+import { treeifyError, type z, type ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import {
   CorsOptions,
@@ -221,9 +221,28 @@ const bindCors = <Aux extends HandlerAuxBase>(
    *   the handler gets it unparsed. An unparsable body is only logged; the
    *   handler hits the same error on read.
    */
-  const withValidated =
-    <K extends 'body' | 'query' | 'path' | 'event'>(key: K) =>
-    <S>(
+  const withValidated = <K extends 'body' | 'query' | 'path' | 'event'>(
+    key: K,
+  ) => {
+    function validated<S>(
+      schema: ZodSchema<S>,
+      handler: (context: {
+        request: Omit<HandlerRequest, K> & { [P in K]: S };
+        response: HandlerResponse;
+        aux: Aux;
+      }) => any,
+      onInvalid?: InvalidResponder<InvalidResponse, S>,
+    ): ReturnType<typeof invoke>;
+    function validated<Z extends ZodSchema>(
+      schema: Z,
+      handler: (context: {
+        request: Omit<HandlerRequest, K> & { [P in K]: z.input<Z> };
+        response: HandlerResponse;
+        aux: Aux;
+      }) => any,
+      onInvalid: { logOnly: true },
+    ): ReturnType<typeof invoke>;
+    function validated<S>(
       schema: ZodSchema<S>,
       handler: (context: {
         request: Omit<HandlerRequest, K> & { [P in K]: S };
@@ -231,8 +250,8 @@ const bindCors = <Aux extends HandlerAuxBase>(
         aux: Aux;
       }) => any,
       onInvalid?: InvalidResponder<InvalidResponse, S> | { logOnly: true },
-    ) =>
-      invoke(async ({ request, response, aux }) => {
+    ) {
+      return invoke(async ({ request, response, aux }) => {
         const target =
           (key === 'event'
             ? process.env.AWS_LAMBDA_FUNCTION_NAME
@@ -266,6 +285,9 @@ const bindCors = <Aux extends HandlerAuxBase>(
           aux,
         });
       });
+    }
+    return validated;
+  };
 
   return Object.assign(invoke, {
     withBody: withValidated('body'),
