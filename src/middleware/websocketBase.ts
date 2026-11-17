@@ -1,5 +1,6 @@
 import type { APIGatewayProxyWebsocketEventV2, Context } from 'aws-lambda';
 import { getLogger } from '../utils/logger';
+import type { ValidationObservation } from './validation';
 
 const logger = getLogger(__filename);
 
@@ -11,6 +12,7 @@ export class WebSocketHandlerRequest {
   public event: APIGatewayProxyWebsocketEventV2;
   public context: Context;
   public lastError: Error | string | undefined;
+  public validation?: ValidationObservation;
 
   private lazyBody?: any;
 
@@ -30,18 +32,19 @@ export class WebSocketHandlerRequest {
   }
 
   get body() {
-    if (!this.event.body) {
-      return {};
-    }
-    if (this.lazyBody === undefined) {
+    if (this.lazyBody === undefined && this.event.body) {
       try {
         this.lazyBody = JSON.parse(this.event.body);
-      } catch (error) {
-        logger.error(`Failed to parse WebSocket body: ${error}`);
+      } catch {
+        logger.error('WebSocket body is not valid JSON');
         this.lazyBody = {};
       }
     }
     return this.lazyBody || {};
+  }
+
+  set body(value: any) {
+    this.lazyBody = value;
   }
 
   get connectionId(): string {
@@ -89,4 +92,7 @@ export interface WebSocketHandlerContext<A extends WebSocketHandlerAuxBase> {
 
 export type WebSocketHandler<A extends WebSocketHandlerAuxBase> = (
   context: WebSocketHandlerContext<A>,
-) => WebSocketHandlerResponse | Promise<WebSocketHandlerResponse> | undefined;
+) =>
+  | WebSocketHandlerResponse
+  | Promise<WebSocketHandlerResponse | undefined>
+  | undefined;

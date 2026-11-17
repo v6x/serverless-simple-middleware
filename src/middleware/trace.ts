@@ -237,7 +237,29 @@ export class TracerPlugin extends HandlerPluginBase<TracerPluginAux> {
     })();
   };
 
-  public end = () => this.tracer.flush();
+  public end = ({ request }: HandlerContext<TracerPluginAux>) => {
+    const observed = request?.validation;
+    if (observed) {
+      this.tracer.push(
+        new TracerLog(
+          this.options.route,
+          'SYSTEM',
+          this.options.system,
+          'validation',
+          observed.target,
+          JSON.stringify({
+            mode: observed.mode,
+            issues: observed.issues,
+            unknownKeys: observed.unknownKeys,
+          }),
+          false,
+          this.client.agent,
+          this.client.version,
+        ),
+      );
+    }
+    return this.tracer.flush();
+  };
 
   public error = ({ request, aux }: HandlerContext<TracerPluginAux>) => {
     if (!aux) {

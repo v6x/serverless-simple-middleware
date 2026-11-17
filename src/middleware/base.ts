@@ -3,6 +3,7 @@ import type {
   APIGatewayEventRequestContext,
 } from 'aws-lambda';
 import { getLogger } from '../utils/logger';
+import type { InvalidResponder, ValidationObservation } from './validation';
 
 const logger = getLogger(__filename);
 
@@ -14,6 +15,7 @@ export class HandlerRequest {
   public event: APIGatewayEvent;
   public context: APIGatewayEventRequestContext;
   public lastError: Error | string | undefined;
+  public validation?: ValidationObservation;
 
   private lazyBody?: any;
 
@@ -21,21 +23,23 @@ export class HandlerRequest {
     this.event = event;
     this.context = context;
     this.lastError = undefined;
-    const normalizedHeaders: Record<string, string | undefined> = {};
-    if (this.event.headers) {
+    // Direct invocations carry no headers; leave them out so withEvent sees the raw payload.
+    if (this.event?.headers) {
+      const normalizedHeaders: Record<string, string | undefined> = {};
       for (const key of Object.keys(this.event.headers)) {
         normalizedHeaders[key.toLowerCase()] = this.event.headers[key];
       }
+      this.event.headers = normalizedHeaders;
     }
-    this.event.headers = normalizedHeaders;
   }
 
   get body() {
-    if (!this.event.body) {
-      return {};
-    }
-    if (this.lazyBody === undefined) {
-      this.lazyBody = JSON.parse(this.event.body);
+    if (this.lazyBody === undefined && this.event.body) {
+      try {
+        this.lazyBody = JSON.parse(this.event.body);
+      } catch {
+        throw new SyntaxError('Request body is not valid JSON');
+      }
     }
     return this.lazyBody || {};
   }
@@ -48,6 +52,10 @@ export class HandlerRequest {
     return this.event.pathParameters || {};
   }
 
+  set path(value: { [key: string]: any }) {
+    this.event.pathParameters = value;
+  }
+
   get query(): { [key: string]: string | undefined } {
     return this.event.queryStringParameters || {};
   }
@@ -57,7 +65,7 @@ export class HandlerRequest {
   }
 
   public header(key: string): string | undefined {
-    return this.event.headers[key.toLowerCase()];
+    return this.event.headers?.[key.toLowerCase()];
   }
 
   public records<T, U>(selector?: (each: T) => U) {
@@ -73,9 +81,16 @@ export type CorsOptions = {
   | { allowedOrigins: readonly string[]; allowCredentials?: boolean }
 );
 
+export interface InvalidResponse {
+  statusCode: number;
+  body: any;
+}
+
 export interface HandlerOptions {
   plugins: Array<HandlerPluginBase<any>>;
   cors: CorsOptions;
+  /** Response for failed validation unless an endpoint overrides it; defaults to 400 with the zod error tree. */
+  onInvalid?: InvalidResponder<InvalidResponse>;
 }
 
 export class HandlerResponse {

@@ -32,7 +32,7 @@ test.each(['HTTP', 'WebSocket'])(
     });
     const expected = {
       statusCode: 500,
-      body: '{"error":"fixture initialization failure"}',
+      body: '{"error":"Internal Server Error"}',
     };
 
     expect(await invocations[0]()).toMatchObject(expected);
@@ -41,5 +41,44 @@ test.each(['HTTP', 'WebSocket'])(
       expect(await invoke()).toMatchObject(expected);
     }
     expect(handler).not.toHaveBeenCalled();
+  },
+);
+test.each(['HTTP', 'WebSocket'])(
+  '%s handler errors are logged but not returned',
+  async (transport) => {
+    // The HTTP builder rethrows handler errors under NODE_ENV=test.
+    const env = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const failing = () => {
+        throw Object.assign(new Error('Duplicate entry'), {
+          sql: "INSERT INTO user VALUES ('secret')",
+        });
+      };
+      const response =
+        transport === 'HTTP'
+          ? await new Promise<any>((resolve) =>
+              build({ plugins: [], cors: { allowedOrigins: [] } })(failing)(
+                {},
+                {},
+                (_error: unknown, result: unknown) => resolve(result),
+              ),
+            )
+          : await buildWebSocket([])(failing)({} as any, {} as any, () => {});
+      // The callback fires before the HTTP builder finishes its error checks.
+      await new Promise((resolve) => setImmediate(resolve));
+      const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+
+      expect(response).toMatchObject({
+        statusCode: 500,
+        body: '{"error":"Internal Server Error"}',
+      });
+      expect(lines).toContain('Duplicate entry');
+      expect(lines).toContain('secret');
+    } finally {
+      log.mockRestore();
+      process.env.NODE_ENV = env;
+    }
   },
 );

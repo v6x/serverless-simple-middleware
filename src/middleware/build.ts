@@ -1,6 +1,6 @@
 import { getLogger } from '../utils/logger';
 
-import { treeifyError, type ZodError, type ZodSchema } from 'zod';
+import { treeifyError, type z, type ZodSchema } from 'zod';
 import { stringifyError } from '../utils';
 import {
   CorsOptions,
@@ -10,9 +10,17 @@ import {
   HandlerPluginBase,
   HandlerRequest,
   HandlerResponse,
+  InvalidResponse,
 } from './base';
+import {
+  InvalidResponder,
+  respondInvalid,
+  validate,
+  Validated,
+} from './validation';
 
 const logger = getLogger(__filename);
+const INTERNAL_ERROR = { error: 'Internal Server Error' };
 
 type Delegator = (okResponsible: boolean) => Promise<any>;
 
@@ -74,9 +82,7 @@ class HandlerProxy<A extends HandlerAuxBase> {
       logger.error(
         `Error while initializing plugins' aux: ${stringifyError(error)}`,
       );
-      this.response.fail(
-        error instanceof Error ? { error: error.message } : error,
-      );
+      this.response.fail(INTERNAL_ERROR);
       return [error];
     }
 
@@ -165,9 +171,7 @@ class HandlerProxy<A extends HandlerAuxBase> {
       }
     }
     if (!this.response.completed) {
-      this.response.fail(
-        error instanceof Error ? { error: error.message } : error,
-      );
+      this.response.fail(INTERNAL_ERROR);
     }
     return error;
   };
@@ -201,6 +205,7 @@ export type BuiltHandler<Aux extends HandlerAuxBase> = ReturnType<
 const bindCors = <Aux extends HandlerAuxBase>(
   middleware: HandlerMiddleware<Aux>,
   cors: CorsOptions,
+  defaultOnInvalid?: InvalidResponder<InvalidResponse>,
 ) => {
   const invoke =
     (handler: Handler<Aux>) => (event: any, context: any, callback: any) => {
@@ -211,105 +216,77 @@ const bindCors = <Aux extends HandlerAuxBase>(
     };
 
   /**
-   * @param schema - Zod schema to validate the request body.
-   * @param handler - Handler that receives the validated body.
+   * @param schema - Zod schema to validate the request `key` part; `event` is
+   *   the raw Lambda event, for direct invocations and other non-HTTP triggers.
+   * @param handler - Handler that receives the validated value.
    * @param onInvalid - Optional callback to customize invalid responses. If it
-   *   returns `{ statusCode, body }`, that is sent instead of the default zod
-   *   error payload.
+   *   returns `{ statusCode, body }`, that is sent instead of the builder's
+   *   `onInvalid` or the default zod error payload. `{ logOnly: true }` only
+   *   observes: it logs a failure and always passes the raw value through, so
+   *   the handler gets it unparsed. An unparsable body is only logged; the
+   *   handler hits the same error on read.
    */
-  const withBody = <S>(
-    schema: ZodSchema<S>,
-    handler: (context: {
-      request: Omit<HandlerRequest, 'body'> & { body: S };
-      response: HandlerResponse;
-      aux: Aux;
-    }) => any,
-    onInvalid?: (
-      error: ZodError,
+  const withValidated =
+    <K extends 'body' | 'query' | 'path' | 'event'>(key: K) =>
+    <
+      Z extends ZodSchema,
+      O extends
+        | InvalidResponder<InvalidResponse, z.output<Z>>
+        | { logOnly: true } = InvalidResponder<InvalidResponse, z.output<Z>>,
+    >(
+      schema: Z,
+      handler: (context: {
+        request: Omit<HandlerRequest, K> & { [P in K]: Validated<Z, O> };
+        response: HandlerResponse;
+        aux: Aux;
+      }) => any,
+      onInvalid?: O,
     ) =>
-      | { statusCode: number; body: any }
-      | Promise<{ statusCode: number; body: any } | void>
-      | void,
-  ) =>
-    invoke(async ({ request, response, aux }) => {
-      const parsed = schema.safeParse(request.body);
-      if (!parsed.success) {
-        logger.error(
-          `Validation failed: ${stringifyError(treeifyError(parsed.error))}`,
-        );
-        if (onInvalid) {
-          const result = await onInvalid(parsed.error);
-          if (result) {
-            return response.fail(result.body, result.statusCode);
-          }
+      invoke(async ({ request, response, aux }) => {
+        const target =
+          (key === 'event'
+            ? process.env.AWS_LAMBDA_FUNCTION_NAME
+            : request.event.resource) ?? '';
+        const { outcome, observation } = validate(schema, () => request[key], {
+          logOnly: typeof onInvalid === 'object' && onInvalid?.logOnly === true,
+          key,
+          target,
+          source:
+            key === 'event'
+              ? `function=${target}`
+              : `resource=${target} user-agent=${request.header('user-agent')}`,
+        });
+        request.validation = observation;
+
+        if (outcome.kind === 'invalid') {
+          const custom = await respondInvalid(outcome.error, [
+            typeof onInvalid === 'function' ? onInvalid : undefined,
+            defaultOnInvalid,
+          ]);
+          return custom
+            ? response.fail(custom.body, custom.statusCode)
+            : response.fail(treeifyError(outcome.error), 400);
         }
-        return response.fail(treeifyError(parsed.error), 400);
-      }
-
-      const typedRequest = request as Omit<HandlerRequest, 'body'> & {
-        body: S;
-      };
-      typedRequest.body = parsed.data;
-      return handler({
-        request: typedRequest,
-        response,
-        aux,
-      });
-    });
-
-  /**
-   * @param schema - Zod schema to validate the request query.
-   * @param handler - Handler that receives the validated query.
-   * @param onInvalid - Optional callback to customize invalid responses. If it
-   *   returns `{ statusCode, body }`, that is sent instead of the default zod
-   *   error payload.
-   */
-  const withQuery = <Q>(
-    schema: ZodSchema<Q>,
-    handler: (context: {
-      request: Omit<HandlerRequest, 'query'> & { query: Q };
-      response: HandlerResponse;
-      aux: Aux;
-    }) => any,
-    onInvalid?: (
-      error: ZodError<Q>,
-    ) =>
-      | { statusCode: number; body: any }
-      | Promise<{ statusCode: number; body: any } | void>
-      | void,
-  ) =>
-    invoke(async ({ request, response, aux }) => {
-      const parsed = schema.safeParse(request.query);
-      if (!parsed.success) {
-        logger.error(
-          `Validation failed: ${stringifyError(treeifyError(parsed.error))}`,
-        );
-        if (onInvalid) {
-          const result = await onInvalid(parsed.error);
-          if (result) {
-            return response.fail(result.body, result.statusCode);
-          }
+        if (outcome.kind === 'valid') {
+          (request as unknown as Record<K, unknown>)[key] = outcome.data;
         }
-        return response.fail(treeifyError(parsed.error), 400);
-      }
-
-      const typedRequest = request as Omit<HandlerRequest, 'query'> & {
-        query: Q;
-      };
-      typedRequest.query = parsed.data;
-      return handler({
-        request: typedRequest,
-        response,
-        aux,
+        return handler({
+          request: request as Omit<HandlerRequest, K> & {
+            [P in K]: Validated<Z, O>;
+          },
+          response,
+          aux,
+        });
       });
-    });
 
   return Object.assign(invoke, {
-    withBody,
-    withQuery,
+    withBody: withValidated('body'),
+    withQuery: withValidated('query'),
+    withPath: withValidated('path'),
+    withEvent: withValidated('event'),
     withCors: (next: CorsOptions): BuiltHandler<Aux> => {
       validateCors(next);
-      return bindCors(middleware, next);
+      return bindCors(middleware, next, defaultOnInvalid);
     },
   });
 };
@@ -318,8 +295,9 @@ const bindCors = <Aux extends HandlerAuxBase>(
 const build = <Aux extends HandlerAuxBase>({
   plugins,
   cors,
+  onInvalid,
 }: HandlerOptions): BuiltHandler<Aux> => {
   validateCors(cors);
-  return bindCors(new HandlerMiddleware<Aux>(plugins), cors);
+  return bindCors(new HandlerMiddleware<Aux>(plugins), cors, onInvalid);
 };
 export default build;

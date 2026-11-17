@@ -57,7 +57,7 @@ export class SecretsManagerCache {
         throw new Error(`Secret ${secretId} has no SecretString value`);
       }
 
-      const secretValue = JSON.parse(response.SecretString);
+      const secretValue = parseSecret(secretId, response.SecretString);
 
       this.cache.set(secretId, secretValue);
 
@@ -84,3 +84,12 @@ export class SecretsManagerCache {
     return secret;
   }
 }
+
+// JSON.parse errors quote the input, which here is the secret itself.
+const parseSecret = (secretId: string, text: string) => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Secret ${secretId} is not valid JSON`);
+  }
+};
