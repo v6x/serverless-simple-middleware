@@ -174,6 +174,26 @@ test('logOnly skips an event too large to validate even with lists cut', async (
   expect(lines).toContain('event: too large to validate');
 });
 
+test('validation logs clip the source so a long user-agent cannot bypass the caps', async () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const invoke = handler.withBody(z.object({ n: z.number() }), () => 'ran', {
+    logOnly: true,
+  });
+
+  await call(invoke, {
+    resource: '/items',
+    headers: { 'User-Agent': 'u'.repeat(8 * 1024) },
+    body: '{bad',
+  });
+  const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+  log.mockRestore();
+
+  expect(lines).toContain(
+    'Validation failed (logOnly) resource=/items user-agent=u',
+  );
+  expect(lines).not.toContain('u'.repeat(256));
+});
+
 test('withEvent validates a direct invocation payload without headers', async () => {
   process.env.AWS_LAMBDA_FUNCTION_NAME = 'worker-fn';
   const log = jest.spyOn(console, 'log').mockImplementation(() => {});

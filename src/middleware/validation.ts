@@ -35,6 +35,7 @@ interface ValidationIssue {
 const MAX_ENTRIES = 20;
 const MAX_KEY_LENGTH = 64;
 const MAX_MESSAGE_LENGTH = 128;
+const MAX_SOURCE_LENGTH = 256;
 // logOnly validates at most this many values; a larger input has each list cut to its first items, or is skipped.
 const MAX_LOG_ONLY_VALUES = 1000;
 const LOG_ONLY_LIST_ITEMS = 10;
@@ -156,7 +157,8 @@ export const validate = <S>(
     source: string;
   },
 ): { outcome: ValidationOutcome<S>; observation?: ValidationObservation } => {
-  const { logOnly, key, target, source } = options;
+  const { logOnly, key, target } = options;
+  const source = clip(options.source, MAX_SOURCE_LENGTH);
   const label = logOnly ? ' (logOnly)' : '';
   const observe = (issues: string[], unknownKeys: string[] = []) =>
     issues.length > 0 || unknownKeys.length > 0
