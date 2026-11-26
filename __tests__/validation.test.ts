@@ -130,6 +130,27 @@ test('logOnly leaves an unparsable body to the handler and logs field paths', as
   expect(lines).not.toContain('secret');
 });
 
+test('logOnly logs a body over 32KB as too large without validating it', async () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const schema = z.object({ items: z.array(z.string()) });
+  const safeParse = jest.spyOn(schema, 'safeParse');
+  const invoke = handler.withBody(
+    schema,
+    ({ request }) => request.body.items.length,
+    { logOnly: true },
+  );
+  const body = JSON.stringify({ items: Array(20000).fill(0) });
+
+  expect(await call(invoke, { body })).toMatchObject({
+    statusCode: 200,
+    body: '20000',
+  });
+  const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+  log.mockRestore();
+  expect(safeParse).not.toHaveBeenCalled();
+  expect(lines).toContain(`body: too large to validate (${body.length} chars)`);
+});
+
 test('withEvent validates a direct invocation payload without headers', async () => {
   process.env.AWS_LAMBDA_FUNCTION_NAME = 'worker-fn';
   const log = jest.spyOn(console, 'log').mockImplementation(() => {});

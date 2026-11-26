@@ -35,6 +35,8 @@ interface ValidationIssue {
 const MAX_ENTRIES = 20;
 const MAX_KEY_LENGTH = 64;
 const MAX_MESSAGE_LENGTH = 128;
+// logOnly logs a longer raw input as too large instead of validating it.
+const MAX_LOG_ONLY_LENGTH = 32 * 1024;
 
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max)}…` : text;
@@ -105,14 +107,21 @@ const droppedKeys = (raw: unknown, parsed: unknown, path = ''): string[] => {
 /**
  * Validates `read()` against `schema`. logOnly only logs and always passes;
  * enforce returns the parsed value or the error. Unknown keys are logged in
- * both but observed only in logOnly.
+ * both but observed only in logOnly. `length` is the raw input length, when
+ * known.
  */
 export const validate = <S>(
   schema: ZodSchema<S>,
   read: () => unknown,
-  options: { logOnly: boolean; key: string; target: string; source: string },
+  options: {
+    logOnly: boolean;
+    key: string;
+    target: string;
+    source: string;
+    length?: number;
+  },
 ): { outcome: ValidationOutcome<S>; observation?: ValidationObservation } => {
-  const { logOnly, key, target, source } = options;
+  const { logOnly, key, target, source, length = 0 } = options;
   const label = logOnly ? ' (logOnly)' : '';
   const observe = (issues: string[], unknownKeys: string[] = []) =>
     issues.length > 0 || unknownKeys.length > 0
@@ -132,6 +141,12 @@ export const validate = <S>(
     }
     return unknownKeys;
   };
+
+  if (logOnly && length > MAX_LOG_ONLY_LENGTH) {
+    const message = `${key}: too large to validate (${length} chars)`;
+    logger.warn(`Validation skipped (logOnly) ${source}: ${message}`);
+    return { outcome: { kind: 'pass' }, observation: observe([message]) };
+  }
 
   let raw: unknown;
   try {

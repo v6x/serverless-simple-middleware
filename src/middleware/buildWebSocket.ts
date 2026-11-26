@@ -212,7 +212,8 @@ const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
    * @param handler - Handler that receives the validated body.
    * @param onInvalid - Optional callback returning the response for an invalid
    *   body, ahead of the builder's `onInvalid`. `{ logOnly: true }` only logs a
-   *   failure and passes the raw body through.
+   *   failure and passes the raw body through; a body over 32KB is logged as
+   *   too large without validating.
    */
   const withBody = <
     Z extends ZodSchema,
@@ -239,6 +240,7 @@ const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
         key: 'body',
         target: request.routeKey,
         source: `route=${request.routeKey}`,
+        length: request.event.body?.length,
       });
       request.validation = observation;
 
