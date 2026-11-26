@@ -35,8 +35,9 @@ interface ValidationIssue {
 const MAX_ENTRIES = 20;
 const MAX_KEY_LENGTH = 64;
 const MAX_MESSAGE_LENGTH = 128;
-// logOnly logs a longer raw input as too large instead of validating it.
-const MAX_LOG_ONLY_LENGTH = 32 * 1024;
+// logOnly validates at most this many values; a larger input has each list cut to its first items, or is skipped.
+const MAX_LOG_ONLY_VALUES = 1000;
+const LOG_ONLY_LIST_ITEMS = 10;
 
 const clip = (text: string, max: number) =>
   text.length > max ? `${text.slice(0, max)}…` : text;
@@ -83,6 +84,42 @@ export const warnInvalidPayload = (
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+// Counts values, each list cut to `items`, stopping once past MAX_LOG_ONLY_VALUES.
+const countValues = (value: unknown, items: number): number => {
+  let count = 1;
+  const stack = [value];
+  while (stack.length > 0 && count <= MAX_LOG_ONLY_VALUES) {
+    const next = stack.pop();
+    const children = Array.isArray(next)
+      ? next.slice(0, Math.min(items, MAX_LOG_ONLY_VALUES))
+      : isRecord(next)
+        ? Object.values(next)
+        : [];
+    count += children.length;
+    if (count <= MAX_LOG_ONLY_VALUES) {
+      stack.push(...children);
+    }
+  }
+  return count;
+};
+
+const cutLists = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.slice(0, LOG_ONLY_LIST_ITEMS).map(cutLists)
+    : isRecord(value)
+      ? Object.fromEntries(
+          Object.entries(value).map(([key, each]) => [key, cutLists(each)]),
+        )
+      : value;
+
+// What logOnly validates: the input, a copy with each list cut, or nothing when still too large.
+const sampleForLogOnly = (raw: unknown): { value: unknown } | undefined =>
+  countValues(raw, Infinity) <= MAX_LOG_ONLY_VALUES
+    ? { value: raw }
+    : countValues(raw, LOG_ONLY_LIST_ITEMS) <= MAX_LOG_ONLY_VALUES
+      ? { value: cutLists(raw) }
+      : undefined;
+
 // Paths present in the input but stripped by the schema.
 const droppedKeys = (raw: unknown, parsed: unknown, path = ''): string[] => {
   if (raw === parsed) {
@@ -107,8 +144,7 @@ const droppedKeys = (raw: unknown, parsed: unknown, path = ''): string[] => {
 /**
  * Validates `read()` against `schema`. logOnly only logs and always passes;
  * enforce returns the parsed value or the error. Unknown keys are logged in
- * both but observed only in logOnly. `length` is the raw input length, when
- * known.
+ * both but observed only in logOnly.
  */
 export const validate = <S>(
   schema: ZodSchema<S>,
@@ -118,10 +154,9 @@ export const validate = <S>(
     key: string;
     target: string;
     source: string;
-    length?: number;
   },
 ): { outcome: ValidationOutcome<S>; observation?: ValidationObservation } => {
-  const { logOnly, key, target, source, length = 0 } = options;
+  const { logOnly, key, target, source } = options;
   const label = logOnly ? ' (logOnly)' : '';
   const observe = (issues: string[], unknownKeys: string[] = []) =>
     issues.length > 0 || unknownKeys.length > 0
@@ -141,12 +176,6 @@ export const validate = <S>(
     }
     return unknownKeys;
   };
-
-  if (logOnly && length > MAX_LOG_ONLY_LENGTH) {
-    const message = `${key}: too large to validate (${length} chars)`;
-    logger.warn(`Validation skipped (logOnly) ${source}: ${message}`);
-    return { outcome: { kind: 'pass' }, observation: observe([message]) };
-  }
 
   let raw: unknown;
   try {
@@ -184,7 +213,13 @@ export const validate = <S>(
   }
 
   try {
-    const parsed = schema.safeParse(raw);
+    const sample = sampleForLogOnly(raw);
+    if (!sample) {
+      const message = `${key}: too large to validate`;
+      logger.warn(`Validation skipped (logOnly) ${source}: ${message}`);
+      return { outcome: { kind: 'pass' }, observation: observe([message]) };
+    }
+    const parsed = schema.safeParse(sample.value);
     if (!parsed.success) {
       warnInvalidPayload(source, parsed.error);
       return {
@@ -194,7 +229,7 @@ export const validate = <S>(
     }
     return {
       outcome: { kind: 'pass' },
-      observation: observe([], reportUnknown(raw, parsed.data)),
+      observation: observe([], reportUnknown(sample.value, parsed.data)),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

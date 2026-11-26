@@ -130,16 +130,18 @@ test('logOnly leaves an unparsable body to the handler and logs field paths', as
   expect(lines).not.toContain('secret');
 });
 
-test('logOnly logs a body over 32KB as too large without validating it', async () => {
+test('logOnly validates a large body with each list cut to its first items', async () => {
   const log = jest.spyOn(console, 'log').mockImplementation(() => {});
-  const schema = z.object({ items: z.array(z.string()) });
+  const schema = z.object({ items: z.array(z.object({ id: z.string() })) });
   const safeParse = jest.spyOn(schema, 'safeParse');
   const invoke = handler.withBody(
     schema,
     ({ request }) => request.body.items.length,
     { logOnly: true },
   );
-  const body = JSON.stringify({ items: Array(20000).fill(0) });
+  const body = JSON.stringify({
+    items: Array.from({ length: 20000 }, () => ({})),
+  });
 
   expect(await call(invoke, { body })).toMatchObject({
     statusCode: 200,
@@ -147,8 +149,29 @@ test('logOnly logs a body over 32KB as too large without validating it', async (
   });
   const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
   log.mockRestore();
+  expect(safeParse).toHaveBeenCalledTimes(1);
+  expect((safeParse.mock.calls[0][0] as any).items).toHaveLength(10);
+  expect(lines).toContain('items[].id: Invalid input: expected string');
+});
+
+test('logOnly skips an event too large to validate even with lists cut', async () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const schema = z.object({ m: z.record(z.string(), z.number()) });
+  const safeParse = jest.spyOn(schema, 'safeParse');
+  const invoke = handler.withEvent(schema, () => 'ran', { logOnly: true });
+  const m = Object.fromEntries(
+    Array.from({ length: 2000 }, (_, i) => [`k${i}`, 'x']),
+  );
+
+  expect(await call(invoke, { m })).toMatchObject({
+    statusCode: 200,
+    body: '"ran"',
+  });
+  const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+  log.mockRestore();
   expect(safeParse).not.toHaveBeenCalled();
-  expect(lines).toContain(`body: too large to validate (${body.length} chars)`);
+  expect(lines).toContain('Validation skipped (logOnly) function=');
+  expect(lines).toContain('event: too large to validate');
 });
 
 test('withEvent validates a direct invocation payload without headers', async () => {
