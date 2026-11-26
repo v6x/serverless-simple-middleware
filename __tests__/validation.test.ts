@@ -255,6 +255,30 @@ test('withBody passes schema defaults for an empty body', async () => {
   });
 });
 
+test('a falsy JSON body reaches the schema as is, while null or no body reads as {}', async () => {
+  const invoke = handler.withBody(
+    z.union([z.boolean(), z.number(), z.object({})]),
+    ({ request }) => request.body,
+  );
+
+  expect(await call(invoke, { body: 'false' })).toMatchObject({
+    statusCode: 200,
+    body: 'false',
+  });
+  expect(await call(invoke, { body: '0' })).toMatchObject({
+    statusCode: 200,
+    body: '0',
+  });
+  expect(await call(invoke, { body: 'null' })).toMatchObject({
+    statusCode: 200,
+    body: '{}',
+  });
+  expect(await call(invoke, {})).toMatchObject({
+    statusCode: 200,
+    body: '{}',
+  });
+});
+
 test('parseLogOnly returns the value unchanged and logs a mismatch', () => {
   const log = jest.spyOn(console, 'log').mockImplementation(() => {});
   const value = { count: 'secret' };
