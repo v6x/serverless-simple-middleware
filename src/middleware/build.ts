@@ -224,7 +224,8 @@ const bindCors = <Aux extends HandlerAuxBase>(
    *   `onInvalid` or the default zod error payload. `{ logOnly: true }` only
    *   observes: it logs a failure and always passes the raw value through, so
    *   the handler gets it unparsed. An unparsable body is only logged; the
-   *   handler hits the same error on read.
+   *   handler hits the same error on read. A large value is validated with each
+   *   list cut to its first items, or logged as too large.
    */
   const withValidated =
     <K extends 'body' | 'query' | 'path' | 'event'>(key: K) =>

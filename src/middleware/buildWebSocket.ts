@@ -212,7 +212,8 @@ const buildWebSocket = <Aux extends WebSocketHandlerAuxBase>(
    * @param handler - Handler that receives the validated body.
    * @param onInvalid - Optional callback returning the response for an invalid
    *   body, ahead of the builder's `onInvalid`. `{ logOnly: true }` only logs a
-   *   failure and passes the raw body through.
+   *   failure and passes the raw body through; a large body is validated with
+   *   each list cut to its first items, or logged as too large.
    */
   const withBody = <
     Z extends ZodSchema,

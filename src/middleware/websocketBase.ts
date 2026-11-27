@@ -40,7 +40,7 @@ export class WebSocketHandlerRequest {
         this.lazyBody = {};
       }
     }
-    return this.lazyBody || {};
+    return this.lazyBody ?? {};
   }
 
   set body(value: any) {

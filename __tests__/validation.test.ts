@@ -130,6 +130,70 @@ test('logOnly leaves an unparsable body to the handler and logs field paths', as
   expect(lines).not.toContain('secret');
 });
 
+test('logOnly validates a large body with each list cut to its first items', async () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const schema = z.object({ items: z.array(z.object({ id: z.string() })) });
+  const safeParse = jest.spyOn(schema, 'safeParse');
+  const invoke = handler.withBody(
+    schema,
+    ({ request }) => request.body.items.length,
+    { logOnly: true },
+  );
+  const body = JSON.stringify({
+    items: Array.from({ length: 20000 }, () => ({})),
+  });
+
+  expect(await call(invoke, { body })).toMatchObject({
+    statusCode: 200,
+    body: '20000',
+  });
+  const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+  log.mockRestore();
+  expect(safeParse).toHaveBeenCalledTimes(1);
+  expect((safeParse.mock.calls[0][0] as any).items).toHaveLength(10);
+  expect(lines).toContain('items[].id: Invalid input: expected string');
+});
+
+test('logOnly skips an event too large to validate even with lists cut', async () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const schema = z.object({ m: z.record(z.string(), z.number()) });
+  const safeParse = jest.spyOn(schema, 'safeParse');
+  const invoke = handler.withEvent(schema, () => 'ran', { logOnly: true });
+  const m = Object.fromEntries(
+    Array.from({ length: 2000 }, (_, i) => [`k${i}`, 'x']),
+  );
+
+  expect(await call(invoke, { m })).toMatchObject({
+    statusCode: 200,
+    body: '"ran"',
+  });
+  const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+  log.mockRestore();
+  expect(safeParse).not.toHaveBeenCalled();
+  expect(lines).toContain('Validation skipped (logOnly) function=');
+  expect(lines).toContain('event: too large to validate');
+});
+
+test('validation logs clip the source so a long user-agent cannot bypass the caps', async () => {
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const invoke = handler.withBody(z.object({ n: z.number() }), () => 'ran', {
+    logOnly: true,
+  });
+
+  await call(invoke, {
+    resource: '/items',
+    headers: { 'User-Agent': 'u'.repeat(8 * 1024) },
+    body: '{bad',
+  });
+  const lines = log.mock.calls.map(([line]) => String(line)).join('\n');
+  log.mockRestore();
+
+  expect(lines).toContain(
+    'Validation failed (logOnly) resource=/items user-agent=u',
+  );
+  expect(lines).not.toContain('u'.repeat(256));
+});
+
 test('withEvent validates a direct invocation payload without headers', async () => {
   process.env.AWS_LAMBDA_FUNCTION_NAME = 'worker-fn';
   const log = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -208,6 +272,30 @@ test('withBody passes schema defaults for an empty body', async () => {
   expect(await call(invoke, {})).toMatchObject({
     statusCode: 200,
     body: '{"a":"x"}',
+  });
+});
+
+test('a falsy JSON body reaches the schema as is, while null or no body reads as {}', async () => {
+  const invoke = handler.withBody(
+    z.union([z.boolean(), z.number(), z.object({})]),
+    ({ request }) => request.body,
+  );
+
+  expect(await call(invoke, { body: 'false' })).toMatchObject({
+    statusCode: 200,
+    body: 'false',
+  });
+  expect(await call(invoke, { body: '0' })).toMatchObject({
+    statusCode: 200,
+    body: '0',
+  });
+  expect(await call(invoke, { body: 'null' })).toMatchObject({
+    statusCode: 200,
+    body: '{}',
+  });
+  expect(await call(invoke, {})).toMatchObject({
+    statusCode: 200,
+    body: '{}',
   });
 });
 

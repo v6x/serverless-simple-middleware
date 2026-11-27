@@ -41,7 +41,7 @@ export class HandlerRequest {
         throw new SyntaxError('Request body is not valid JSON');
       }
     }
-    return this.lazyBody || {};
+    return this.lazyBody ?? {};
   }
 
   set body(value: any) {
