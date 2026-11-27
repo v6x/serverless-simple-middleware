@@ -4,6 +4,9 @@
   "version": "0.0.79",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "author": "VoyagerX",
   "license": "MIT",
   "repository": {
